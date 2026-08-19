@@ -13,7 +13,7 @@ import {
 import { logger } from '../config/logger';
 import { RefreshTokenModel } from '../models/refreshToken.model';
 import { UserModel, toPublicUser } from '../models/user.model';
-import { sendOtpEmail } from '../services/email.service';
+import { sendOtpEmailAsync } from '../services/email.service';
 import {
   issueOtp,
   verifyOtp,
@@ -51,7 +51,7 @@ export const register = async (req: Request, res: Response) => {
     const user = await UserModel.create({ name, email, passwordHash: hashedPassword });
 
     const code = await issueOtp(user.email, 'email_verification');
-    await sendOtpEmail(user.email, 'email_verification', code, OTP_TTL_MINUTES);
+    sendOtpEmailAsync(user.email, 'email_verification', code, OTP_TTL_MINUTES);
 
     res.status(201).json({
       message:
@@ -120,7 +120,7 @@ export const resendOtp = async (req: Request, res: Response) => {
     }
 
     const code = await issueOtp(email, purpose);
-    await sendOtpEmail(email, purpose, code, OTP_TTL_MINUTES);
+    sendOtpEmailAsync(email, purpose, code, OTP_TTL_MINUTES);
 
     res.json({ message: 'A new verification code has been sent to your email.' });
   } catch (err) {
@@ -143,7 +143,7 @@ export const forgotPassword = async (req: Request, res: Response) => {
     const user = await UserModel.findByEmail(email);
     if (user && user.email_verified_at) {
       const code = await issueOtp(user.email, 'password_reset');
-      await sendOtpEmail(user.email, 'password_reset', code, OTP_TTL_MINUTES);
+      sendOtpEmailAsync(user.email, 'password_reset', code, OTP_TTL_MINUTES);
     }
     // Identical response regardless of whether the account exists.
     res.json({

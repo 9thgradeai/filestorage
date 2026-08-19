@@ -14,15 +14,12 @@ export const validateEnv = (): void => {
   if (process.env.NODE_ENV !== 'production') return;
 
   const required = buildRequired();
-  // OTP email delivery requires an SMTP relay in production.
-  if (process.env.SMTP_HOST && process.env.SMTP_USER && process.env.SMTP_PASS) {
-    // configured — nothing extra required
-  } else if (!process.env.SMTP_HOST) {
-    required.push('SMTP_HOST');
-  } else if (!process.env.SMTP_USER) {
-    required.push('SMTP_USER');
-  } else if (!process.env.SMTP_PASS) {
-    required.push('SMTP_PASS');
+  // OTP email delivery requires a provider in production: the Resend HTTPS API
+  // (works on all plans) or an SMTP relay (Pro and above on Railway).
+  const hasResend = Boolean(process.env.RESEND_API_KEY);
+  const hasSmtp = Boolean(process.env.SMTP_HOST && process.env.SMTP_USER && process.env.SMTP_PASS);
+  if (!hasResend && !hasSmtp) {
+    required.push('RESEND_API_KEY or SMTP_HOST');
   }
 
   const missing = required.filter((key) => !process.env[key]);

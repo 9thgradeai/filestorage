@@ -14,7 +14,8 @@ A full-stack, production-grade file storage service.
   token (7 days), both `HttpOnly`/`SameSite=Lax`; double-submit CSRF protection.
 - Registration with name / email / password / confirm-password. New accounts
   must confirm ownership of a **real email** via a 6-digit one-time code (OTP)
-  sent through SMTP before they can sign in; resend with a 60s cooldown.
+  sent through the Resend HTTPS API (SMTP fallback) before they can sign in;
+  resend with a 60s cooldown.
 - Forgot-password flow: an OTP is emailed to the verified address, then the
   password is rotated and every existing session is revoked.
 - Files uploaded via a temp-file pipeline, validated by **magic bytes**
@@ -116,12 +117,16 @@ browser never leaves the frontend origin (no CORS; `SameSite=Lax` cookies work).
    DATABASE_URL=${{Postgres.DATABASE_URL}}
    FRONTEND_URL=<frontend https URL>
    PUBLIC_FILE_BASE_URL=<frontend https URL>
-   SMTP_HOST=<smtp relay host>
-   SMTP_PORT=587
-   SMTP_USER=<smtp username>
-   SMTP_PASS=<smtp password>
-   SMTP_FROM_NAME=Vault
-   SMTP_FROM_EMAIL=<noreply address>
+   # Email delivery needs one provider: Resend (HTTPS API, works on all
+   # Railway plans) OR SMTP (Railway Pro and above only).
+   RESEND_API_KEY=<resend key>
+   EMAIL_FROM_NAME=Vault
+   EMAIL_FROM_EMAIL=<address on your verified Resend domain>
+   # SMTP_HOST=smtp.example.com   # fallback provider; Pro plan and above
+   # SMTP_PORT=587
+   # SMTP_USER=<smtp username>
+   # SMTP_PASS=<smtp password>
+   # SMTP_FROM_EMAIL=<noreply address>
    ```
 4. Deploy: `railway redeploy --service backend --from-source --yes`. The
    Dockerfile runs migrations, then starts the API.
