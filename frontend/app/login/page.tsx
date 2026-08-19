@@ -3,27 +3,52 @@
 import { useState } from 'react';
 import { useRouter } from 'next/navigation';
 import Link from 'next/link';
-import { SignIn } from '@phosphor-icons/react';
+import { SignIn, ShieldCheck } from '@phosphor-icons/react';
 import { useAuth } from '../../lib/auth';
-import { Brand } from '../../components/Brand';
+
+interface LoginError extends Error {
+  status?: number;
+  data?: any;
+}
 
 export default function LoginPage() {
   const router = useRouter();
-  const { login } = useAuth();
+  const { login, resendOtp } = useAuth();
   const [email, setEmail] = useState('');
   const [password, setPassword] = useState('');
   const [error, setError] = useState('');
+  const [unverified, setUnverified] = useState(false);
   const [busy, setBusy] = useState(false);
 
   const handleSubmit = async (e: React.FormEvent) => {
     e.preventDefault();
     setError('');
+    setUnverified(false);
     setBusy(true);
     try {
       await login(email, password);
       router.push('/dashboard');
     } catch (err: any) {
-      setError(err.message || 'Login failed');
+      const loginErr = err as LoginError;
+      if (loginErr.data?.code === 'EMAIL_NOT_VERIFIED') {
+        setUnverified(true);
+      } else {
+        setError(loginErr.message || 'Login failed');
+      }
+    } finally {
+      setBusy(false);
+    }
+  };
+
+  const handleResend = async () => {
+    setError('');
+    setBusy(true);
+    try {
+      await resendOtp(email, 'email_verification');
+      setUnverified(false);
+      setError('A new verification code has been sent to your email.');
+    } catch (err: any) {
+      setError(err.message || 'Could not resend code');
     } finally {
       setBusy(false);
     }
@@ -33,7 +58,7 @@ export default function LoginPage() {
     <div className="auth-wrap">
       <div className="auth-card">
         <Link href="/" className="auth-brand">
-          <Brand />
+          <ShieldCheck size={40} weight="duotone" color="var(--accent-strong)" />
         </Link>
         <h1>Welcome back</h1>
         <p className="auth-sub">Sign in to your vault.</p>
@@ -68,12 +93,29 @@ export default function LoginPage() {
               autoComplete="current-password"
               required
             />
+            <div className="row space-between" style={{ marginTop: '0.4rem' }}>
+              <span className="helper">
+                <Link href="/forgot-password" className="link">
+                  Forgot password?
+                </Link>
+              </span>
+            </div>
           </div>
+          {unverified && (
+            <p className="field-error" role="alert">
+              This account hasn&apos;t been verified yet. Check your inbox for the 6-digit code.
+            </p>
+          )}
           {error && <p className="field-error" role="alert">{error}</p>}
           <button type="submit" className="btn btn-primary mt-4" disabled={busy}>
             {busy ? 'Signing in…' : 'Sign in'}
             {!busy && <SignIn size={16} weight="bold" />}
           </button>
+          {unverified && (
+            <button type="button" className="btn btn-ghost btn-sm mt-3" onClick={handleResend} disabled={busy}>
+              Resend verification code
+            </button>
+          )}
         </form>
 
         <p className="auth-note">SESSION MANAGED WITH HTTPONLY COOKIES</p>

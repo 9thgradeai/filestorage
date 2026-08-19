@@ -209,7 +209,7 @@ export default function DashboardPage() {
           <Brand />
         </Link>
         <div className="nav-links">
-          <span className="brand-mono">{user?.email}</span>
+          <span className="brand-mono">{user?.name || user?.email}</span>
           <button
             className="btn btn-ghost btn-sm"
             aria-label="Logout"

@@ -2,9 +2,25 @@ import jwt from 'jsonwebtoken';
 import bcrypt from 'bcryptjs';
 import { Request, Response } from 'express';
 import { pool } from '../config/database';
-import { validateRegistration } from '../services/validation';
+import {
+  validateRegistration,
+  validateLogin,
+  validateVerifyEmail,
+  validateResendOtp,
+  validateForgotPassword,
+  validateResetPassword,
+} from '../services/validation';
 import { logger } from '../config/logger';
 import { RefreshTokenModel } from '../models/refreshToken.model';
+import { UserModel, toPublicUser } from '../models/user.model';
+import { sendOtpEmail } from '../services/email.service';
+import {
+  issueOtp,
+  verifyOtp,
+  secondsUntilResendAllowed,
+  normalizeEmail,
+  OTP_TTL_MINUTES,
+} from '../services/otp.service';
 import {
   signAccessToken,
   setAuthCookies,
@@ -12,69 +28,185 @@ import {
   REFRESH_TOKEN_DAYS,
 } from '../services/auth.service';
 
-interface IUser {
-  id: number;
-  email: string;
-  password_hash: string;
-  created_at: Date;
-}
+const getPublicUser = toPublicUser;
 
-const getPublicUser = (row: { id: number; email: string; created_at: Date }) => ({
-  id: row.id,
-  email: row.email,
-  created_at: row.created_at,
-});
-
-// @desc Register new user
+// @desc Register a new user — account is created in an "unverified" state and
+//       an OTP is emailed to confirm ownership of the address before login.
 export const register = async (req: Request, res: Response) => {
-  const { email, password } = req.body;
+  const { name, email, password, confirmPassword } = req.body;
 
-  const { error } = validateRegistration({ email, password });
+  const { error } = validateRegistration({ name, email, password, confirmPassword });
   if (error) {
     return res.status(400).json({ message: error.details[0].message });
   }
 
-  const existing = await pool.query('SELECT id FROM users WHERE email = $1', [email]);
-  if (existing.rows.length > 0) {
-    return res.status(409).json({ message: 'User already exists' });
-  }
-
-  const rounds = parseInt(process.env.BCRYPT_ROUNDS || '12', 10);
-  const hashedPassword = await bcrypt.hash(password, rounds);
-
   try {
-    const insertResult = await pool.query(
-      'INSERT INTO users (email, password_hash) VALUES ($1, $2) RETURNING id, email, created_at',
-      [email, hashedPassword]
-    );
-    const user = insertResult.rows[0];
+    const existing = await UserModel.findByEmail(email);
+    if (existing) {
+      return res.status(409).json({ message: 'An account with this email already exists' });
+    }
 
-    const accessToken = signAccessToken(user.id);
-    const refreshToken = await RefreshTokenModel.create(user.id, REFRESH_TOKEN_DAYS);
-    const csrfToken = setAuthCookies(res, accessToken, refreshToken);
+    const rounds = parseInt(process.env.BCRYPT_ROUNDS || '12', 10);
+    const hashedPassword = await bcrypt.hash(password, rounds);
+    const user = await UserModel.create({ name, email, passwordHash: hashedPassword });
 
-    res.status(201).json({ user: getPublicUser(user), csrf_token: csrfToken });
+    const code = await issueOtp(user.email, 'email_verification');
+    await sendOtpEmail(user.email, 'email_verification', code, OTP_TTL_MINUTES);
+
+    res.status(201).json({
+      message:
+        'Account created. We sent a 6-digit verification code to your email — enter it to activate your account.',
+      email: user.email,
+    });
   } catch (err) {
     logger.error({ err: err }, 'Registration error:');
     res.status(500).json({ message: 'Server error' });
   }
 };
 
-// @desc Authenticate user & get tokens
-export const login = async (req: Request, res: Response) => {
-  const { email, password } = req.body;
+// @desc Verify the email OTP and activate the account (also signs the user in).
+export const verifyEmail = async (req: Request, res: Response) => {
+  const { email, otp } = req.body;
 
-  const { error } = validateRegistration({ email, password });
+  const { error } = validateVerifyEmail({ email, otp });
   if (error) {
     return res.status(400).json({ message: error.details[0].message });
   }
 
   try {
-    const result = await pool.query(
-      'SELECT * FROM users WHERE email = $1',
-      [email]
-    );
-    const user: IUser | undefined = result.rows[0];
+    const ok = await verifyOtp(email, 'email_verification', otp);
+    if (!ok) {
+      return res
+        .status(400)
+        .json({ message: 'Invalid or expired verification code' });
+    }
+
+    const updated = await UserModel.markEmailVerified(email);
+    if (!updated) {
+      return res.status(400).json({ message: 'Account not found for this email' });
+    }
+
+    const user = await UserModel.findByEmail(email);
+    if (!user) {
+      return res.status(400).json({ message: 'Account not found for this email' });
+    }
+
+    const accessToken = signAccessToken(user.id);
+    const refreshToken = await RefreshTokenModel.create(user.id, REFRESH_TOKEN_DAYS);
+    const csrfToken = setAuthCookies(res, accessToken, refreshToken);
+
+    res.json({ user: getPublicUser(user), csrf_token: csrfToken });
+  } catch (err) {
+    logger.error({ err: err }, 'Email verification error:');
+    res.status(500).json({ message: 'Server error' });
+  }
+};
+
+// @desc Re-send the OTP for an existing (unverified) registration or a reset.
+export const resendOtp = async (req: Request, res: Response) => {
+  const { email, purpose } = req.body;
+
+  const { error } = validateResendOtp({ email, purpose });
+  if (error) {
+    return res.status(400).json({ message: error.details[0].message });
+  }
+
+  try {
+    const cooldown = await secondsUntilResendAllowed(email, purpose);
+    if (cooldown > 0) {
+      return res
+        .status(429)
+        .json({ message: `Please wait ${cooldown} seconds before requesting another code` });
+    }
+
+    const code = await issueOtp(email, purpose);
+    await sendOtpEmail(email, purpose, code, OTP_TTL_MINUTES);
+
+    res.json({ message: 'A new verification code has been sent to your email.' });
+  } catch (err) {
+    logger.error({ err: err }, 'Resend OTP error:');
+    res.status(500).json({ message: 'Server error' });
+  }
+};
+
+// @desc Request a password reset — sends an OTP to the verified account email.
+//       Always responds identically to avoid leaking which addresses are registered.
+export const forgotPassword = async (req: Request, res: Response) => {
+  const { email } = req.body;
+
+  const { error } = validateForgotPassword({ email });
+  if (error) {
+    return res.status(400).json({ message: error.details[0].message });
+  }
+
+  try {
+    const user = await UserModel.findByEmail(email);
+    if (user && user.email_verified_at) {
+      const code = await issueOtp(user.email, 'password_reset');
+      await sendOtpEmail(user.email, 'password_reset', code, OTP_TTL_MINUTES);
+    }
+    // Identical response regardless of whether the account exists.
+    res.json({
+      message:
+        'If an account exists for that email, a password reset code has been sent.',
+    });
+  } catch (err) {
+    logger.error({ err: err }, 'Forgot password error:');
+    res.status(500).json({ message: 'Server error' });
+  }
+};
+
+// @desc Reset the password after OTP verification. Invalidates all sessions.
+export const resetPassword = async (req: Request, res: Response) => {
+  const { email, otp, password, confirmPassword } = req.body;
+
+  const { error } = validateResetPassword({ email, otp, password, confirmPassword });
+  if (error) {
+    return res.status(400).json({ message: error.details[0].message });
+  }
+
+  try {
+    const ok = await verifyOtp(email, 'password_reset', otp);
+    if (!ok) {
+      return res
+        .status(400)
+        .json({ message: 'Invalid or expired reset code' });
+    }
+
+    const rounds = parseInt(process.env.BCRYPT_ROUNDS || '12', 10);
+    const hashedPassword = await bcrypt.hash(password, rounds);
+
+    const updated = await UserModel.updatePasswordHash(email, hashedPassword);
+    if (!updated) {
+      return res.status(400).json({ message: 'Account not found for this email' });
+    }
+
+    // Account becomes verified on reset (proves email ownership) and every
+    // existing session is revoked so old passwords/tokens are worthless.
+    await UserModel.markEmailVerified(email);
+    const user = await UserModel.findByEmail(email);
+    if (user) {
+      await RefreshTokenModel.revokeAllForUser(user.id);
+    }
+
+    res.json({ message: 'Password reset successful. You can now sign in.' });
+  } catch (err) {
+    logger.error({ err: err }, 'Reset password error:');
+    res.status(500).json({ message: 'Server error' });
+  }
+};
+
+// @desc Authenticate user & get tokens (verified accounts only).
+export const login = async (req: Request, res: Response) => {
+  const { email, password } = req.body;
+
+  const { error } = validateLogin({ email, password });
+  if (error) {
+    return res.status(400).json({ message: error.details[0].message });
+  }
+
+  try {
+    const user = await UserModel.findByEmail(email);
 
     if (!user) {
       return res.status(400).json({ message: 'Invalid credentials' });
@@ -83,6 +215,13 @@ export const login = async (req: Request, res: Response) => {
     const isMatch = await bcrypt.compare(password, user.password_hash);
     if (!isMatch) {
       return res.status(400).json({ message: 'Invalid credentials' });
+    }
+
+    if (!user.email_verified_at) {
+      return res.status(403).json({
+        code: 'EMAIL_NOT_VERIFIED',
+        message: 'Please verify your email before signing in. Check your inbox for the code.',
+      });
     }
 
     const accessToken = signAccessToken(user.id);
@@ -112,18 +251,21 @@ export const refresh = async (req: Request, res: Response) => {
       return res.status(401).json({ message: 'Refresh token is invalid or expired' });
     }
 
-    const userResult = await pool.query(
-      'SELECT id, email, created_at FROM users WHERE id = $1',
-      [rotated.userId]
-    );
-    if (!userResult.rows[0]) {
+    const user = await UserModel.findById(rotated.userId);
+    if (!user) {
       return res.status(401).json({ message: 'User no longer exists' });
+    }
+    if (!user.email_verified_at) {
+      return res.status(403).json({
+        code: 'EMAIL_NOT_VERIFIED',
+        message: 'Please verify your email before signing in.',
+      });
     }
 
     const accessToken = signAccessToken(rotated.userId);
     const csrfToken = setAuthCookies(res, accessToken, rotated.token);
 
-    res.json({ user: getPublicUser(userResult.rows[0]), csrf_token: csrfToken });
+    res.json({ user: getPublicUser(user), csrf_token: csrfToken });
   } catch (err) {
     logger.error({ err: err }, 'Refresh error:');
     res.status(500).json({ message: 'Server error' });
@@ -153,14 +295,11 @@ export const me = async (req: Request, res: Response) => {
   }
 
   try {
-    const result = await pool.query(
-      'SELECT id, email, created_at FROM users WHERE id = $1',
-      [userId]
-    );
-    if (!result.rows[0]) {
+    const user = await UserModel.findById(userId);
+    if (!user) {
       return res.status(401).json({ message: 'Unauthorized' });
     }
-    res.json({ user: getPublicUser(result.rows[0]) });
+    res.json({ user: getPublicUser(user) });
   } catch (err) {
     logger.error({ err: err }, 'Me error:');
     res.status(500).json({ message: 'Server error' });

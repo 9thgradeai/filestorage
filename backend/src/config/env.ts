@@ -13,7 +13,19 @@ const buildRequired = (): string[] => {
 export const validateEnv = (): void => {
   if (process.env.NODE_ENV !== 'production') return;
 
-  const missing = buildRequired().filter((key) => !process.env[key]);
+  const required = buildRequired();
+  // OTP email delivery requires an SMTP relay in production.
+  if (process.env.SMTP_HOST && process.env.SMTP_USER && process.env.SMTP_PASS) {
+    // configured — nothing extra required
+  } else if (!process.env.SMTP_HOST) {
+    required.push('SMTP_HOST');
+  } else if (!process.env.SMTP_USER) {
+    required.push('SMTP_USER');
+  } else if (!process.env.SMTP_PASS) {
+    required.push('SMTP_PASS');
+  }
+
+  const missing = required.filter((key) => !process.env[key]);
   if (missing.length > 0) {
     throw new Error(
       `Missing required environment variables in production: ${missing.join(', ')}`

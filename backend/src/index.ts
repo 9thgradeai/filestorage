@@ -10,6 +10,7 @@ import { errorHandler } from './middleware/errorHandler';
 import { pool } from './config/database';
 import { validateEnv } from './config/env';
 import { logger, httpLogger } from './config/logger';
+import { purgeExpiredOtps } from './services/otp.service';
 
 dotenv.config();
 validateEnv();
@@ -51,13 +52,27 @@ app.use(rateLimit({
 // Stricter limiter for auth endpoints to resist credential brute-forcing.
 const authLimiter = rateLimit({
   windowMs: 15 * 60 * 1000,
-  max: 20, // 20 attempts per IP per 15 minutes
+  max: parseInt(process.env.AUTH_RATE_LIMIT_MAX || '') || 20, // 20 attempts per IP per 15 minutes
   message: 'Too many authentication attempts, please try again later',
   standardHeaders: true,
   legacyHeaders: false,
 });
 app.use('/api/auth/login', authLimiter);
 app.use('/api/auth/register', authLimiter);
+
+// OTP endpoints are already guarded per-email by expiry + attempt caps; the
+// limiter adds a per-IP backstop against bulk abuse (spam, code spraying).
+const otpLimiter = rateLimit({
+  windowMs: 15 * 60 * 1000,
+  max: parseInt(process.env.OTP_RATE_LIMIT_MAX || '') || 30,
+  message: 'Too many requests, please try again later',
+  standardHeaders: true,
+  legacyHeaders: false,
+});
+app.use('/api/auth/verify-email', otpLimiter);
+app.use('/api/auth/resend-otp', otpLimiter);
+app.use('/api/auth/forgot-password', otpLimiter);
+app.use('/api/auth/reset-password', otpLimiter);
 
 app.use(express.json({ limit: '50mb' }));
 app.use(express.urlencoded({ extended: true, limit: '50mb' }));
@@ -99,6 +114,14 @@ if (require.main === module) {
     logger.info(`Health check: http://localhost:${PORT}/api/health`);
     logger.info(`Environment: ${process.env.NODE_ENV || 'development'}`);
   });
+
+  // Sweep expired OTP rows periodically (best-effort housekeeping).
+  const otpSweep = setInterval(() => {
+    purgeExpiredOtps().catch((err) =>
+      logger.error({ err: err }, 'Expired OTP cleanup failed')
+    );
+  }, 6 * 60 * 60 * 1000);
+  otpSweep.unref();
 
   // Graceful shutdown handling
   const gracefulShutdown = (signal: string) => {

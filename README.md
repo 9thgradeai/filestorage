@@ -12,6 +12,11 @@ A full-stack, production-grade file storage service.
 
 - Cookie-based auth: JWT access token (15 min) + rotating, DB-backed refresh
   token (7 days), both `HttpOnly`/`SameSite=Lax`; double-submit CSRF protection.
+- Registration with name / email / password / confirm-password. New accounts
+  must confirm ownership of a **real email** via a 6-digit one-time code (OTP)
+  sent through SMTP before they can sign in; resend with a 60s cooldown.
+- Forgot-password flow: an OTP is emailed to the verified address, then the
+  password is rotated and every existing session is revoked.
 - Files uploaded via a temp-file pipeline, validated by **magic bytes**
   (never trusting the client MIME/extension), then streamed to storage
   (local disk or SSE-encrypted S3) without buffering in RAM (up to 100 MB).
@@ -111,6 +116,12 @@ browser never leaves the frontend origin (no CORS; `SameSite=Lax` cookies work).
    DATABASE_URL=${{Postgres.DATABASE_URL}}
    FRONTEND_URL=<frontend https URL>
    PUBLIC_FILE_BASE_URL=<frontend https URL>
+   SMTP_HOST=<smtp relay host>
+   SMTP_PORT=587
+   SMTP_USER=<smtp username>
+   SMTP_PASS=<smtp password>
+   SMTP_FROM_NAME=Vault
+   SMTP_FROM_EMAIL=<noreply address>
    ```
 4. Deploy: `railway redeploy --service backend --from-source --yes`. The
    Dockerfile runs migrations, then starts the API.
@@ -146,8 +157,12 @@ typecheck and a coverage gate.
 
 | Method | Path                                  | Auth  | Notes                                  |
 | ------ | ------------------------------------- | ----- | -------------------------------------- |
-| POST   | `/api/auth/register`                  | —     | Creates account, sets auth cookies     |
-| POST   | `/api/auth/login`                     | —     | Sets auth cookies + CSRF cookie        |
+| POST   | `/api/auth/register`                  | —     | Creates unverified account, emails OTP |
+| POST   | `/api/auth/verify-email`              | —     | Verifies emailed OTP, signs in         |
+| POST   | `/api/auth/resend-otp`                | —     | Resends OTP (60s cooldown)             |
+| POST   | `/api/auth/forgot-password`           | —     | Emails a reset OTP (enumeration-safe)  |
+| POST   | `/api/auth/reset-password`            | —     | OTP + new password; revokes sessions   |
+| POST   | `/api/auth/login`                     | —     | Verified accounts only                 |
 | POST   | `/api/auth/refresh`                   | —     | Rotates refresh token (cookie)         |
 | POST   | `/api/auth/logout`                    | ✓*    | Revokes refresh token                  |
 | GET    | `/api/auth/me`                        | ✓     | Current user                           |
@@ -172,6 +187,8 @@ clients), cookie-based requests must send the CSRF header (browsers).
 
 - **Tokens never touch `localStorage`** — access/refresh tokens live in
   `HttpOnly` cookies; the access token also rotates on refresh.
+- **OTPs** are 6 digits from a CSPRNG, stored only as SHA-256 hashes, expire in
+  10 minutes, are single-use, and are burned after 5 failed attempts.
 - **CSRF** uses the double-submit pattern; `SameSite=Lax` plus the header check
   block cross-site requests.
 - **Uploads** are validated against the file's magic bytes, stored under a

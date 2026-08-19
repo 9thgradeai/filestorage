@@ -933,6 +933,25 @@ textarea:focus-visible {
   letter-spacing: 0.03em;
 }
 
+/* One-time-code field: wide, centered, spaced digits. */
+.otp-input {
+  text-align: center;
+  font-family: var(--font-geist-mono), monospace;
+  font-size: 1.5rem;
+  letter-spacing: 0.6em;
+  font-weight: 700;
+}
+
+.auth-resend {
+  margin-top: 1.25rem;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  gap: 0.4rem;
+  color: var(--text-muted);
+  font-size: 0.85rem;
+}
+
 /* ─── Shared page ───────────────────────────────────────────────────── */
 
 .shared-card {
