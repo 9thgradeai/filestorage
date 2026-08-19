@@ -1,0 +1,11 @@
+{
+  "remoteName": "origin",
+  "projects": [
+    {
+      "id": "prj_OkCtnlCbZIRHJB1EQFj7h9bgA8oB",
+      "name": "filestorage",
+      "directory": ".",
+      "orgId": "team_dzDn6RUsAYlWpJvlouWOjexL"
+    }
+  ]
+}
