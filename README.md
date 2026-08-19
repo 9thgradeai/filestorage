@@ -140,6 +140,12 @@ browser never leaves the frontend origin (no CORS; `SameSite=Lax` cookies work).
    to the backend at Vercel's platform layer — large uploads up to 100 MB
    stream through without hitting the edge-function 4.5 MB limit.
 
+## Architecture
+
+See [`docs/ARCHITECTURE.md`](docs/ARCHITECTURE.md) for the full system
+architecture: stack, data model, auth/session security, storage & sharing,
+deployment topology, and testing/quality gates.
+
 ## Testing & quality
 
 ```bash
