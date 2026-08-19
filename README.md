@@ -5,7 +5,7 @@
 A production-grade, full-stack file storage platform with real-email
 verification, rotating session security, and pluggable object storage.
 
-**Next.js 16 · Express 4 · TypeScript · PostgreSQL 16 · AWS S3 · Resend**
+**Next.js 16 · Express 4 · TypeScript · PostgreSQL 16 · Local/S3 Storage · SendGrid Email**
 
 [![Node](https://img.shields.io/badge/node-20.x-339933?logo=nodedotjs&logoColor=white)](https://nodejs.org)
 [![TypeScript](https://img.shields.io/badge/typescript-5.9-3178C6?logo=typescript&logoColor=white)](https://www.typescriptlang.org)
@@ -13,7 +13,7 @@ verification, rotating session security, and pluggable object storage.
 [![PostgreSQL](https://img.shields.io/badge/postgres-16-4169E1?logo=postgresql&logoColor=white)](https://www.postgresql.org)
 [![Next.js](https://img.shields.io/badge/next.js-16-000000?logo=nextdotjs&logoColor=white)](https://nextjs.org)
 [![React](https://img.shields.io/badge/react-19-61DAFB?logo=react&logoColor=black)](https://react.dev)
-[![Jest](https://img.shields.io/badge/tests-76%20passing-C21325?logo=jest&logoColor=white)]()
+[![Jest](https://img.shields.io/badge/tests-79%20passing-C21325?logo=jest&logoColor=white)]()
 [![Dependencies](https://img.shields.io/badge/npm%20audit-0%20vulnerabilities-success)]()
 
 </div>
@@ -60,7 +60,8 @@ Two deployable halves share one monorepo:
   `HttpOnly` / `SameSite=Lax` cookies. Double-submit CSRF protection on every
   mutation.
 - **Real-email verification.** New accounts must confirm a 6-digit OTP delivered
-  via the **Resend HTTPS API** (SendGrid or SMTP fallback) before they can sign in.
+  via an HTTPS email API — **SendGrid v3** in the current production build (Resend
+  and SMTP are supported alternatives) — before they can sign in.
   OTP delivery is **non-blocking** — register/resend/forgot respond in
   milliseconds while mail goes out in the background.
 - **Password reset that revokes everything.** Reset OTPs are emailed to the
@@ -206,6 +207,21 @@ The live stack runs **backend + Postgres on Railway** and the **frontend on
 Vercel**. `API_BACKEND_URL` is baked into the Next rewrites, keeping the browser
 on one origin.
 
+### Current production snapshot (this repo)
+
+| Piece | Live value |
+|---|---|
+| Frontend | Vercel — `https://filestorage-lovat.vercel.app` (auto-deploys from `main`) |
+| Backend API | Railway — `https://backend-production-ce86.up.railway.app` |
+| Database | Railway Postgres 16 (managed, internal network) |
+| Storage driver | `local` → Railway volume mounted at `/data` |
+| Email provider | **SendGrid v3 REST API** (free trial: 100 emails/day, 60 days) |
+| Sender | `EMAIL_FROM_EMAIL=9thgradeai@gmail.com` (verified Single Sender) |
+
+Provider precedence in `email.service.ts`: **Resend** if `RESEND_API_KEY` is set,
+else **SendGrid** if `SENDGRID_API_KEY` is set, else SMTP. Only one needs to be
+configured; production currently uses SendGrid.
+
 ### Backend — Railway
 
 ```bash
@@ -226,16 +242,16 @@ FRONTEND_URL=<frontend https URL>
 PUBLIC_FILE_BASE_URL=<frontend https URL>
 
 # Email delivery needs one provider:
-#  - Resend HTTPS API (recommended — works on all Railway plans, incl. the
-#    Free/Trial/Hobby tiers where outbound SMTP is blocked)
-#  - SendGrid v3 REST API (free trial — no domain needed, 100 emails/day for
-#    60 days; verify a Single Sender, then use it as EMAIL_FROM_EMAIL)
-#  - SMTP (Railway Pro and above only)
-RESEND_API_KEY=<resend key>
+#  - SendGrid v3 REST API (current production — free trial, no domain needed,
+#    100 emails/day for 60 days; verify a Single Sender, then set its address
+#    as EMAIL_FROM_EMAIL)
+#  - Resend HTTPS API (recommended alternative — works on all Railway plans,
+#    incl. the Free/Trial/Hobby tiers where outbound SMTP is blocked)
+#  - SMTP relay (Railway Pro and above only)
+SENDGRID_API_KEY=<sg key>
 EMAIL_FROM_NAME=Vault
-EMAIL_FROM_EMAIL=<address on your verified Resend domain>
-# SENDGRID_API_KEY=<sg key>          # alternative when RESEND_API_KEY is unset
-# EMAIL_FROM_EMAIL=<verified single sender>
+EMAIL_FROM_EMAIL=<verified single sender, e.g. 9thgradeai@gmail.com>
+# RESEND_API_KEY=<resend key>            # used when set, over SendGrid
 # SMTP_HOST=smtp.example.com   # fallback provider; Pro plan and above
 # SMTP_PORT=587
 # SMTP_USER=<smtp username>
@@ -247,6 +263,9 @@ Deploy:
 ```bash
 railway redeploy --service backend --environment production --from-source --yes
 ```
+
+> Changing email provider: unset `RESEND_API_KEY` to make SendGrid the active
+> provider, and vice-versa — the service picks one at request time.
 
 > The Dockerfile runs `node dist/db/migrate.js` (idempotent) before starting the
 > API, so new schema ships with each deploy.
@@ -317,7 +336,7 @@ cookie-based browser requests must echo the CSRF cookie as a header.
 ```bash
 # Backend (needs a test DB; see backend/jest.config.js defaults)
 cd backend
-JWT_SECRET=test-secret npm test          # 76 tests, runInBand (avoids DB deadlocks)
+JWT_SECRET=test-secret npm test          # 79 tests, runInBand (avoids DB deadlocks)
 JWT_SECRET=test-secret npm run test:coverage
 
 # Frontend
@@ -326,9 +345,10 @@ npm run lint
 npm run build
 ```
 
-- **76 backend tests** across auth, files, validation, rate limiting, security,
-  and email — driving the real app against a dedicated `filestorage_test`
-  database with a fully mocked S3 client (no network calls).
+- **79 backend tests** across auth, files, validation, rate limiting, security,
+  and email (Resend, SendGrid, and SMTP providers) — driving the real app against
+  a dedicated `filestorage_test` database with a fully mocked S3 client and
+  `fetch` (no network calls).
 - **Enforced coverage thresholds** — statements ≥ 80%, functions ≥ 75%,
   branches ≥ 50% — currently exceeded across all metrics.
 - **CI (GitHub Actions)** spins up an ephemeral `postgres:16` service container
@@ -350,8 +370,9 @@ filestorage/
 │   │   ├── middleware/       # authenticate (JWT/cookie), csrf, error handler
 │   │   ├── models/           # user, file, refreshToken (SQL access)
 │   │   ├── routes/           # auth.routes, file.routes
-│   │   ├── services/         # auth (tokens/cookies), otp, email (Resend/SMTP),
-│   │   │                     # storage (S3/local), file validation, joi schemas
+│   │   ├── services/         # auth (tokens/cookies), otp, email (Resend/
+│   │   │                     # SendGrid/SMTP), storage (S3/local), file
+│   │   │                     # validation, joi schemas
 │   │   ├── db/migrate.ts     # idempotent migration runner
 │   │   ├── utils/, types/    # crypto helpers, express typing
 │   │   └── __tests__/        # Jest + supertest suites
