@@ -1,0 +1,42 @@
+# ─── Environment ────────────────────────────────────────────────────────────
+.env
+.env.local
+.env.*.local
+!.env.example
+
+# ─── Node / npm ─────────────────────────────────────────────────────────────
+node_modules/
+npm-debug.log*
+yarn-error.log*
+
+# ─── Backend ────────────────────────────────────────────────────────────────
+backend/dist/
+backend/coverage/
+backend/.nyc_output/
+*.tsbuildinfo
+
+# ─── Frontend (Next.js) ─────────────────────────────────────────────────────
+frontend/.next/
+frontend/out/
+frontend/.eslintcache
+frontend/next-env.d.ts
+
+# ─── Tests ──────────────────────────────────────────────────────────────────
+coverage/
+.vscode/launch.json
+
+# ─── OS / editors ───────────────────────────────────────────────────────────
+.DS_Store
+Thumbs.db
+*.swp
+.idea/
+.vscode/*
+!.vscode/extensions.json
+!.vscode/settings.json
+
+# ─── Logs ───────────────────────────────────────────────────────────────────
+*.log
+logs/
+
+# ─── Local tool state ───────────────────────────────────────────────────────
+.jetro/
