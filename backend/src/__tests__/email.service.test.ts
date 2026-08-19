@@ -52,6 +52,51 @@ describe('Email service', () => {
     });
   });
 
+  describe('SendGrid v3 provider', () => {
+    it('sends via the SendGrid API when only SENDGRID_API_KEY is set', async () => {
+      process.env.RESEND_API_KEY = '';
+      process.env.SENDGRID_API_KEY = 'SG.test_key';
+      process.env.EMAIL_FROM_NAME = 'Vault';
+      process.env.EMAIL_FROM_EMAIL = 'sender@example.com';
+
+      const captured: any = {};
+      (global as any).fetch = async (url: string, init: any) => {
+        captured.url = url;
+        captured.init = init;
+        return { ok: true, status: 202 };
+      };
+
+      const ok = await sendOtpEmail('test@example.com', 'email_verification', '123456', 10);
+
+      expect(ok).toBe(true);
+      expect(captured.url).toBe('https://api.sendgrid.com/v3/mail/send');
+      const body = JSON.parse(captured.init.body);
+      expect(body.from.email).toBe('sender@example.com');
+      expect(body.from.name).toBe('Vault');
+      expect(body.personalizations[0].to[0].email).toBe('test@example.com');
+      expect(body.subject).toContain('verification');
+      expect(body.content.some((c: any) => c.type === 'text/html')).toBe(true);
+      expect(captured.init.headers.Authorization).toBe('Bearer SG.test_key');
+    });
+
+    it('returns false and logs when SendGrid rejects', async () => {
+      process.env.SENDGRID_API_KEY = 'SG.test_key';
+      process.env.EMAIL_FROM_EMAIL = 'sender@example.com';
+      (global as any).fetch = async () => ({ ok: false, status: 400, text: async () => 'bad request' });
+
+      const ok = await sendOtpEmail('test@example.com', 'email_verification', '123456', 10);
+      expect(ok).toBe(false);
+    });
+
+    it('returns false when SendGrid has no EMAIL_FROM_EMAIL', async () => {
+      process.env.SENDGRID_API_KEY = 'SG.test_key';
+      process.env.EMAIL_FROM_EMAIL = '';
+
+      const ok = await sendOtpEmail('test@example.com', 'email_verification', '123456', 10);
+      expect(ok).toBe(false);
+    });
+  });
+
   describe('sendOtpEmailAsync', () => {
     it('captures the code synchronously and does not block', async () => {
       // Run in test mode: the code must be retrievable right after the call.

@@ -14,12 +14,19 @@ export const validateEnv = (): void => {
   if (process.env.NODE_ENV !== 'production') return;
 
   const required = buildRequired();
-  // OTP email delivery requires a provider in production: the Resend HTTPS API
-  // (works on all plans) or an SMTP relay (Pro and above on Railway).
+  // OTP email delivery requires a provider in production:
+  //  - Resend HTTPS API (works on all Railway plans)
+  //  - SendGrid v3 REST API (free trial, no domain, needs a verified Single
+  //    Sender via EMAIL_FROM_EMAIL)
+  //  - SMTP relay (Railway Pro and above only)
   const hasResend = Boolean(process.env.RESEND_API_KEY);
+  const hasSendgrid = Boolean(process.env.SENDGRID_API_KEY);
   const hasSmtp = Boolean(process.env.SMTP_HOST && process.env.SMTP_USER && process.env.SMTP_PASS);
-  if (!hasResend && !hasSmtp) {
-    required.push('RESEND_API_KEY or SMTP_HOST');
+  if (!hasResend && !hasSendgrid && !hasSmtp) {
+    required.push('RESEND_API_KEY, SENDGRID_API_KEY, or SMTP_HOST');
+  }
+  if (hasSendgrid && !process.env.EMAIL_FROM_EMAIL) {
+    required.push('EMAIL_FROM_EMAIL (SendGrid verified Single Sender)');
   }
 
   const missing = required.filter((key) => !process.env[key]);

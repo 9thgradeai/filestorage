@@ -60,7 +60,7 @@ Two deployable halves share one monorepo:
   `HttpOnly` / `SameSite=Lax` cookies. Double-submit CSRF protection on every
   mutation.
 - **Real-email verification.** New accounts must confirm a 6-digit OTP delivered
-  via the **Resend HTTPS API** (with SMTP fallback) before they can sign in.
+  via the **Resend HTTPS API** (SendGrid or SMTP fallback) before they can sign in.
   OTP delivery is **non-blocking** — register/resend/forgot respond in
   milliseconds while mail goes out in the background.
 - **Password reset that revokes everything.** Reset OTPs are emailed to the
@@ -92,12 +92,12 @@ Two deployable halves share one monorepo:
 | Backend DB | `pg` (node-postgres `Pool`) | Transactional PostgreSQL access |
 | Backend uploads | `multer` + `magic-bytes.js` | Streaming multipart + content sniffing |
 | Backend storage | `@aws-sdk/client-s3`, `s3-request-presigner` | S3 ops + presigned URLs |
-| Backend email | Resend REST API (primary) + `nodemailer` (SMTP fallback) | OTP / verification / reset delivery |
+| Backend email | Resend REST API (primary) + SendGrid / `nodemailer` (fallbacks) | OTP / verification / reset delivery |
 | Backend logging | `pino`, `pino-http` | Structured + access logs |
 | Backend hardening | `helmet`, `cors`, `cookie-parser`, `express-rate-limit` | Headers, CORS, cookies, throttling |
 | **Database** | PostgreSQL 16 | Relational store (migrations 001–003) |
 | **Storage** | AWS S3 **or** local volume (env-switched driver) | Object storage |
-| **Email** | Resend HTTPS API **or** SMTP | Reliable transactional delivery |
+| **Email** | Resend HTTPS API, SendGrid, or SMTP | Reliable transactional delivery |
 | **CI** | GitHub Actions | Backend tests vs ephemeral Postgres + frontend lint/build |
 | **Deploy** | Vercel (frontend) + Railway (backend & Postgres) | Production hosting |
 | **Containers** | Docker (multi-stage, `node:20-alpine`) | Reproducible builds |
@@ -228,10 +228,14 @@ PUBLIC_FILE_BASE_URL=<frontend https URL>
 # Email delivery needs one provider:
 #  - Resend HTTPS API (recommended — works on all Railway plans, incl. the
 #    Free/Trial/Hobby tiers where outbound SMTP is blocked)
+#  - SendGrid v3 REST API (free trial — no domain needed, 100 emails/day for
+#    60 days; verify a Single Sender, then use it as EMAIL_FROM_EMAIL)
 #  - SMTP (Railway Pro and above only)
 RESEND_API_KEY=<resend key>
 EMAIL_FROM_NAME=Vault
 EMAIL_FROM_EMAIL=<address on your verified Resend domain>
+# SENDGRID_API_KEY=<sg key>          # alternative when RESEND_API_KEY is unset
+# EMAIL_FROM_EMAIL=<verified single sender>
 # SMTP_HOST=smtp.example.com   # fallback provider; Pro plan and above
 # SMTP_PORT=587
 # SMTP_USER=<smtp username>

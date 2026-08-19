@@ -14,6 +14,8 @@ const isProduction = process.env.NODE_ENV === 'production';
 
 const resendConfigured = (): boolean => Boolean(process.env.RESEND_API_KEY);
 
+const sendgridConfigured = (): boolean => Boolean(process.env.SENDGRID_API_KEY);
+
 const smtpConfigured = (): boolean =>
   Boolean(process.env.SMTP_HOST && process.env.SMTP_USER && process.env.SMTP_PASS);
 
@@ -88,6 +90,50 @@ const sendViaResend = async ({
   }
 };
 
+// Send via the SendGrid v3 REST API (HTTPS). Requires EMAIL_FROM_EMAIL to be a
+// verified Single Sender (free trial: 100 emails/day for 60 days, no domain
+// needed) — an alternative to Resend for testing/demo purposes.
+const sendViaSendGrid = async ({
+  to,
+  subject,
+  text,
+  html,
+}: SendEmailParams): Promise<boolean> => {
+  const from = fromAddress();
+  if (!from.email) {
+    logger.error({ to, subject }, 'SendGrid requires EMAIL_FROM_EMAIL');
+    return false;
+  }
+  try {
+    const res = await fetch('https://api.sendgrid.com/v3/mail/send', {
+      method: 'POST',
+      headers: {
+        Authorization: `Bearer ${process.env.SENDGRID_API_KEY}`,
+        'Content-Type': 'application/json',
+      },
+      body: JSON.stringify({
+        personalizations: [{ to: [{ email: to }] }],
+        from: { email: from.email, name: from.name },
+        subject,
+        content: [
+          { type: 'text/plain', value: text },
+          { type: 'text/html', value: html },
+        ],
+      }),
+      signal: AbortSignal.timeout(15000),
+    });
+    if (!res.ok) {
+      const body = await res.text();
+      logger.error({ status: res.status, body, to, subject }, 'SendGrid API error');
+      return false;
+    }
+    return true;
+  } catch (err) {
+    logger.error({ err, to, subject }, 'Failed to send email via SendGrid');
+    return false;
+  }
+};
+
 // In test mode the latest code per (email, purpose) is kept so integration
 // tests can drive the full register → OTP → verify flow deterministically.
 const sentCodes = new Map<string, string>();
@@ -107,6 +153,11 @@ export const sendEmail = async ({ to, subject, text, html }: SendEmailParams): P
   // Prefer Resend (HTTPS) — required on Railway plans where SMTP is blocked.
   if (resendConfigured()) {
     return sendViaResend({ to, subject, text, html });
+  }
+
+  // SendGrid v3 REST API — free-trial alternative (no domain, 100/day).
+  if (sendgridConfigured()) {
+    return sendViaSendGrid({ to, subject, text, html });
   }
 
   const t = getTransporter();
