@@ -22,7 +22,7 @@ export default function CtaBand() {
               style={{ fontSize: '1rem', padding: '0.9rem 1.8rem' }}
             >
               {user ? 'Open dashboard' : 'Get started'}
-              <ArrowRight size={16} weight="bold" />
+              <ArrowRight size={16} weight="bold" aria-hidden="true" />
             </Link>
           </div>
         </Reveal>

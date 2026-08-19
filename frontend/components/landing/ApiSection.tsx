@@ -21,14 +21,7 @@ export default function ApiSection() {
   return (
     <section className="section-pad">
       <div className="container">
-        <div
-          style={{
-            display: 'grid',
-            gridTemplateColumns: '1fr 1.2fr',
-            gap: '3.5rem',
-            alignItems: 'center',
-          }}
-        >
+        <div className="split-grid">
           <Reveal>
             <div className="sec-head" style={{ marginBottom: 0 }}>
               <h2>Built for developers.</h2>
@@ -58,7 +51,7 @@ export default function ApiSection() {
                   padding: '0.3rem 0.7rem',
                 }}
               >
-                <TerminalWindow size={12} weight="bold" />
+                <TerminalWindow size={12} weight="bold" aria-hidden="true" />
                 REST API
               </div>
               {SNIPPET.split('\n').map((line, i) => (
@@ -73,7 +66,7 @@ export default function ApiSection() {
                 title="Copy snippet"
                 onClick={() => navigator.clipboard.writeText(SNIPPET)}
               >
-                <Copy size={15} weight="bold" />
+                <Copy size={15} weight="bold" aria-hidden="true" />
               </button>
             </div>
           </Reveal>

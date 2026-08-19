@@ -2,7 +2,14 @@
 
 import { useEffect, useState } from 'react';
 import Link from 'next/link';
-import { Key, ShieldCheck, ArrowLeft, ClockCountdown } from '@phosphor-icons/react';
+import {
+  Key,
+  ShieldCheck,
+  ArrowLeft,
+  ClockCountdown,
+  Eye,
+  EyeSlash,
+} from '@phosphor-icons/react';
 import { useAuth } from '../../lib/auth';
 
 type Step = 'email' | 'reset' | 'done';
@@ -15,6 +22,8 @@ export default function ForgotPasswordPage() {
   const [otp, setOtp] = useState('');
   const [password, setPassword] = useState('');
   const [confirmPassword, setConfirmPassword] = useState('');
+  const [showPassword, setShowPassword] = useState(false);
+  const [showConfirm, setShowConfirm] = useState(false);
   const [error, setError] = useState('');
   const [info, setInfo] = useState('');
   const [busy, setBusy] = useState(false);
@@ -77,8 +86,8 @@ export default function ForgotPasswordPage() {
   return (
     <div className="auth-wrap">
       <div className="auth-card">
-        <Link href="/" className="auth-brand">
-          <ShieldCheck size={40} weight="duotone" color="var(--accent-strong)" />
+        <Link href="/" className="auth-brand" aria-label="Vault home">
+          <ShieldCheck size={40} weight="duotone" color="var(--accent-strong)" aria-hidden="true" />
         </Link>
 
         {step === 'email' && (
@@ -107,7 +116,7 @@ export default function ForgotPasswordPage() {
               {info && <p className="helper" style={{ color: 'var(--accent-strong)' }}>{info}</p>}
               <button type="submit" className="btn btn-primary mt-4" disabled={busy}>
                 {busy ? 'Sending…' : 'Send reset code'}
-                {!busy && <Key size={16} weight="bold" />}
+                {!busy && <Key size={16} weight="bold" aria-hidden="true" />}
               </button>
             </form>
             <p className="auth-foot">
@@ -147,17 +156,32 @@ export default function ForgotPasswordPage() {
                 <label className="label" htmlFor="password">
                   New password
                 </label>
-                <input
-                  id="password"
-                  type="password"
-                  value={password}
-                  onChange={(e) => setPassword(e.target.value)}
-                  className="input"
-                  placeholder="••••••••"
-                  autoComplete="new-password"
-                  minLength={8}
-                  required
-                />
+                <div className="input-wrap">
+                  <input
+                    id="password"
+                    type={showPassword ? 'text' : 'password'}
+                    value={password}
+                    onChange={(e) => setPassword(e.target.value)}
+                    className="input"
+                    placeholder="••••••••"
+                    autoComplete="new-password"
+                    minLength={8}
+                    required
+                  />
+                  <button
+                    type="button"
+                    className="input-toggle"
+                    aria-label={showPassword ? 'Hide password' : 'Show password'}
+                    aria-pressed={showPassword}
+                    onClick={() => setShowPassword((v) => !v)}
+                  >
+                    {showPassword ? (
+                      <EyeSlash size={17} weight="bold" aria-hidden="true" />
+                    ) : (
+                      <Eye size={17} weight="bold" aria-hidden="true" />
+                    )}
+                  </button>
+                </div>
                 <p className="helper">
                   Minimum 8 characters, with an uppercase, a lowercase, a number, and a symbol.
                 </p>
@@ -166,22 +190,37 @@ export default function ForgotPasswordPage() {
                 <label className="label" htmlFor="confirmPassword">
                   Confirm new password
                 </label>
-                <input
-                  id="confirmPassword"
-                  type="password"
-                  value={confirmPassword}
-                  onChange={(e) => setConfirmPassword(e.target.value)}
-                  className="input"
-                  placeholder="••••••••"
-                  autoComplete="new-password"
-                  minLength={8}
-                  required
-                />
+                <div className="input-wrap">
+                  <input
+                    id="confirmPassword"
+                    type={showConfirm ? 'text' : 'password'}
+                    value={confirmPassword}
+                    onChange={(e) => setConfirmPassword(e.target.value)}
+                    className="input"
+                    placeholder="••••••••"
+                    autoComplete="new-password"
+                    minLength={8}
+                    required
+                  />
+                  <button
+                    type="button"
+                    className="input-toggle"
+                    aria-label={showConfirm ? 'Hide password' : 'Show password'}
+                    aria-pressed={showConfirm}
+                    onClick={() => setShowConfirm((v) => !v)}
+                  >
+                    {showConfirm ? (
+                      <EyeSlash size={17} weight="bold" aria-hidden="true" />
+                    ) : (
+                      <Eye size={17} weight="bold" aria-hidden="true" />
+                    )}
+                  </button>
+                </div>
               </div>
               {error && <p className="field-error" role="alert">{error}</p>}
               <button type="submit" className="btn btn-primary mt-4" disabled={busy || otp.length !== 6}>
                 {busy ? 'Resetting…' : 'Reset password'}
-                {!busy && <Key size={16} weight="bold" />}
+                {!busy && <Key size={16} weight="bold" aria-hidden="true" />}
               </button>
             </form>
             <div className="auth-resend">
@@ -211,7 +250,7 @@ export default function ForgotPasswordPage() {
         {step === 'done' && (
           <>
             <div className="auth-brand">
-              <ShieldCheck size={40} weight="duotone" color="var(--accent-strong)" />
+              <ShieldCheck size={40} weight="duotone" color="var(--accent-strong)" aria-hidden="true" />
             </div>
             <h1>Password updated</h1>
             <p className="auth-sub">

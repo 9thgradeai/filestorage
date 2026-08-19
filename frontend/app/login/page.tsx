@@ -3,7 +3,7 @@
 import { useState } from 'react';
 import { useRouter } from 'next/navigation';
 import Link from 'next/link';
-import { SignIn, ShieldCheck } from '@phosphor-icons/react';
+import { SignIn, ShieldCheck, Eye, EyeSlash } from '@phosphor-icons/react';
 import { useAuth } from '../../lib/auth';
 
 interface LoginError extends Error {
@@ -16,6 +16,7 @@ export default function LoginPage() {
   const { login, resendOtp } = useAuth();
   const [email, setEmail] = useState('');
   const [password, setPassword] = useState('');
+  const [showPassword, setShowPassword] = useState(false);
   const [error, setError] = useState('');
   const [unverified, setUnverified] = useState(false);
   const [busy, setBusy] = useState(false);
@@ -57,8 +58,8 @@ export default function LoginPage() {
   return (
     <div className="auth-wrap">
       <div className="auth-card">
-        <Link href="/" className="auth-brand">
-          <ShieldCheck size={40} weight="duotone" color="var(--accent-strong)" />
+        <Link href="/" className="auth-brand" aria-label="Vault home">
+          <ShieldCheck size={40} weight="duotone" color="var(--accent-strong)" aria-hidden="true" />
         </Link>
         <h1>Welcome back</h1>
         <p className="auth-sub">Sign in to your vault.</p>
@@ -83,16 +84,31 @@ export default function LoginPage() {
             <label className="label" htmlFor="password">
               Password
             </label>
-            <input
-              id="password"
-              type="password"
-              value={password}
-              onChange={(e) => setPassword(e.target.value)}
-              className="input"
-              placeholder="••••••••"
-              autoComplete="current-password"
-              required
-            />
+            <div className="input-wrap">
+              <input
+                id="password"
+                type={showPassword ? 'text' : 'password'}
+                value={password}
+                onChange={(e) => setPassword(e.target.value)}
+                className="input"
+                placeholder="••••••••"
+                autoComplete="current-password"
+                required
+              />
+              <button
+                type="button"
+                className="input-toggle"
+                aria-label={showPassword ? 'Hide password' : 'Show password'}
+                aria-pressed={showPassword}
+                onClick={() => setShowPassword((v) => !v)}
+              >
+                {showPassword ? (
+                  <EyeSlash size={17} weight="bold" aria-hidden="true" />
+                ) : (
+                  <Eye size={17} weight="bold" aria-hidden="true" />
+                )}
+              </button>
+            </div>
             <div className="row space-between" style={{ marginTop: '0.4rem' }}>
               <span className="helper">
                 <Link href="/forgot-password" className="link">
@@ -109,7 +125,7 @@ export default function LoginPage() {
           {error && <p className="field-error" role="alert">{error}</p>}
           <button type="submit" className="btn btn-primary mt-4" disabled={busy}>
             {busy ? 'Signing in…' : 'Sign in'}
-            {!busy && <SignIn size={16} weight="bold" />}
+            {!busy && <SignIn size={16} weight="bold" aria-hidden="true" />}
           </button>
           {unverified && (
             <button type="button" className="btn btn-ghost btn-sm mt-3" onClick={handleResend} disabled={busy}>

@@ -55,8 +55,8 @@ export default function Pricing() {
                   {p.features.map((f) => (
                     <li key={f}>
                       <span className="ok">
-                        <Check size={15} weight="bold" />
-                      </span>
+                      <Check size={15} weight="bold" aria-hidden="true" />
+                    </span>
                       {f}
                     </li>
                   ))}

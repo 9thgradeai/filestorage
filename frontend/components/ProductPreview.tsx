@@ -19,7 +19,7 @@ const FILES = [
 
 export function ProductPreview() {
   return (
-    <div className="preview-shell">
+    <div className="preview-shell" aria-hidden="true">
       <div className="preview-bar">
         <span className="preview-dot" />
         <span className="preview-dot" />

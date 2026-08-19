@@ -33,6 +33,12 @@
 
   /* ── Motion ── */
   --ease-out: cubic-bezier(0.16, 1, 0.3, 1);
+
+  /* ── Z-index scale ── */
+  --z-nav: 40;
+  --z-menu: 50;
+  --z-modal: 100;
+  --z-toast: 1000;
 }
 
 * {
@@ -54,6 +60,56 @@ body {
   line-height: 1.6;
   -webkit-font-smoothing: antialiased;
   text-rendering: optimizeLegibility;
+}
+
+/* Modern safe-area-aware viewport units; 100dvh avoids the mobile URL-bar jump. */
+@supports (min-height: 100dvh) {
+  .min-h-screen {
+    min-height: 100dvh;
+  }
+}
+
+/* Eliminate 300ms tap delay on touch without blocking pinch-zoom. */
+a,
+button,
+label,
+input,
+select,
+textarea {
+  touch-action: manipulation;
+}
+
+/* Balanced line wrapping on headings (progressive, user-agent-controlled). */
+h1,
+h2,
+h3,
+.heading {
+  text-wrap: balance;
+}
+
+/* Anchor targets keep clear of the sticky nav. */
+section[id],
+div[id] {
+  scroll-margin-top: 88px;
+}
+
+/* Screen-reader-only skip link, revealed on keyboard focus. */
+.skip-link {
+  position: absolute;
+  top: -100%;
+  left: 1rem;
+  z-index: var(--z-toast);
+  padding: 0.6rem 1rem;
+  border-radius: var(--r-sm);
+  background: var(--accent);
+  color: var(--on-accent);
+  font-weight: 600;
+  font-size: 0.85rem;
+  transition: top 0.15s var(--ease-out);
+}
+
+.skip-link:focus-visible {
+  top: 0.75rem;
 }
 
 a {
@@ -93,11 +149,23 @@ select {
   padding: 0 1.5rem;
 }
 
+@media (max-width: 480px) {
+  .container {
+    padding: 0 1rem;
+  }
+}
+
 .page {
   max-width: 1000px;
   margin: 0 auto;
   padding: 2rem 1.5rem 4rem;
   position: relative;
+}
+
+@media (max-width: 480px) {
+  .page {
+    padding: 1.5rem 1rem 3rem;
+  }
 }
 
 .page-glow::before {
@@ -114,6 +182,21 @@ select {
 
 .min-h-screen {
   min-height: 100vh;
+}
+
+/* Two-column split used by ApiSection; collapses on small screens. */
+.split-grid {
+  display: grid;
+  grid-template-columns: 1fr 1.2fr;
+  gap: 3.5rem;
+  align-items: center;
+}
+
+@media (max-width: 900px) {
+  .split-grid {
+    grid-template-columns: 1fr;
+    gap: 2rem;
+  }
 }
 
 .row {
@@ -249,6 +332,36 @@ textarea:focus-visible {
   font-size: 0.8rem;
 }
 
+/* Comfortable tap targets on touch devices (>=44px hit area). */
+@media (hover: none) and (pointer: coarse) {
+  .btn {
+    min-height: 44px;
+  }
+
+  .btn-sm {
+    min-height: 40px;
+    padding: 0.5rem 0.85rem;
+  }
+
+  .btn-icon {
+    width: 44px;
+    height: 44px;
+  }
+
+  .input {
+    min-height: 48px;
+  }
+
+  .nav-toggle {
+    min-width: 44px;
+    min-height: 44px;
+  }
+
+  .file-actions .btn {
+    min-height: 40px;
+  }
+}
+
 .btn-icon {
   width: 2.1rem;
   height: 2.1rem;
@@ -300,6 +413,47 @@ textarea:focus-visible {
   border-color: var(--accent);
   background: var(--surface-2);
   box-shadow: 0 0 0 3px var(--accent-dim);
+}
+
+/* Password visibility toggle inside the input. */
+.input-wrap {
+  position: relative;
+}
+
+.input-wrap .input {
+  padding-right: 3rem;
+}
+
+.input-toggle {
+  position: absolute;
+  top: 50%;
+  right: 0.35rem;
+  transform: translateY(-50%);
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  width: 2.6rem;
+  height: 2.6rem;
+  border-radius: var(--r-sm);
+  color: var(--text-dim);
+  transition: color 0.15s var(--ease-out), background 0.15s var(--ease-out);
+}
+
+.input-toggle:hover {
+  color: var(--text);
+  background: var(--surface-3);
+}
+
+.input-toggle:focus-visible {
+  outline: 2px solid var(--accent);
+  outline-offset: 2px;
+}
+
+@media (hover: none) and (pointer: coarse) {
+  .input-toggle {
+    width: 3rem;
+    height: 3rem;
+  }
 }
 
 .helper {
@@ -357,10 +511,11 @@ textarea:focus-visible {
 .nav {
   position: sticky;
   top: 0;
-  z-index: 40;
+  z-index: var(--z-nav);
   display: flex;
   align-items: center;
   justify-content: space-between;
+  gap: 1rem;
   height: 64px;
   padding: 0 1.5rem;
   background: rgba(9, 9, 11, 0.8);
@@ -369,10 +524,84 @@ textarea:focus-visible {
   border-bottom: 1px solid var(--border);
 }
 
+@media (max-width: 480px) {
+  .nav {
+    padding: 0 1rem;
+  }
+}
+
 .nav-links {
   display: flex;
   align-items: center;
-  gap: 1rem;
+  gap: 1.6rem;
+}
+
+.nav-toggle {
+  display: none;
+  align-items: center;
+  justify-content: center;
+  width: 42px;
+  height: 42px;
+  border-radius: var(--r-sm);
+  border: 1px solid var(--border);
+  color: var(--text);
+  background: var(--surface);
+  transition: border-color 0.15s var(--ease-out), background 0.15s var(--ease-out);
+}
+
+.nav-toggle:hover {
+  border-color: var(--border-strong);
+  background: var(--surface-2);
+}
+
+/* Mobile: collapse links behind a toggle (landing nav only). */
+@media (max-width: 900px) {
+  .nav-toggle {
+    display: inline-flex;
+  }
+
+  .nav--landing .nav-links {
+    position: absolute;
+    top: 64px;
+    left: 0;
+    right: 0;
+    flex-direction: column;
+    align-items: stretch;
+    gap: 0.25rem;
+    padding: 0.75rem 1rem 1rem;
+    background: rgba(9, 9, 11, 0.96);
+    backdrop-filter: blur(16px);
+    -webkit-backdrop-filter: blur(16px);
+    border-bottom: 1px solid var(--border-strong);
+    box-shadow: 0 30px 60px -30px rgba(0, 0, 0, 0.8);
+    z-index: var(--z-menu);
+    transform: translateY(-8px);
+    opacity: 0;
+    visibility: hidden;
+    transition: opacity 0.18s var(--ease-out), transform 0.18s var(--ease-out),
+      visibility 0.18s;
+  }
+
+  .nav--landing.nav-open .nav-links {
+    transform: translateY(0);
+    opacity: 1;
+    visibility: visible;
+  }
+
+  .nav--landing .nav-links .link {
+    padding: 0.7rem 0.85rem;
+    border-radius: var(--r-sm);
+    font-size: 0.95rem;
+  }
+
+  .nav--landing .nav-links .link:hover {
+    background: var(--surface-2);
+  }
+
+  .nav--landing .nav-links .btn {
+    margin-top: 0.35rem;
+    padding: 0.75rem 0.85rem;
+  }
 }
 
 .link {
@@ -414,11 +643,31 @@ textarea:focus-visible {
   letter-spacing: 0.08em;
 }
 
+.nav .brand-mono {
+  max-width: 220px;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+
+@media (max-width: 480px) {
+  .nav .brand-mono {
+    max-width: 110px;
+  }
+}
+
+/* Dashboard logout collapses to icon-only on small screens. */
+@media (max-width: 600px) {
+  .logout-label {
+    display: none;
+  }
+}
+
 /* ─── File grid / cards ─────────────────────────────────────────────── */
 
 .file-grid {
   display: grid;
-  grid-template-columns: repeat(auto-fill, minmax(280px, 1fr));
+  grid-template-columns: repeat(auto-fill, minmax(min(280px, 100%), 1fr));
   gap: 1rem;
 }
 
@@ -430,6 +679,7 @@ textarea:focus-visible {
   display: flex;
   flex-direction: column;
   gap: 0.75rem;
+  min-width: 0;
   transition: border-color 0.18s var(--ease-out), transform 0.18s var(--ease-out),
     background 0.18s var(--ease-out);
 }
@@ -438,6 +688,12 @@ textarea:focus-visible {
   border-color: var(--border-strong);
   background: var(--surface-2);
   transform: translateY(-2px);
+}
+
+@media (hover: none) {
+  .file-card:hover {
+    transform: none;
+  }
 }
 
 .file-type {
@@ -457,8 +713,10 @@ textarea:focus-visible {
   font-weight: 600;
   font-size: 0.95rem;
   word-break: break-word;
+  overflow-wrap: anywhere;
   line-height: 1.35;
   color: var(--text);
+  min-width: 0;
 }
 
 .file-meta {
@@ -475,6 +733,16 @@ textarea:focus-visible {
   padding-top: 0.5rem;
   border-top: 1px solid var(--border);
   margin-top: auto;
+}
+
+.file-card .row.space-between {
+  flex-wrap: wrap;
+  gap: 0.5rem;
+}
+
+.file-card .row.space-between > .row:first-child {
+  flex: 1;
+  min-width: 0;
 }
 
 .dashboard-empty {
@@ -876,6 +1144,13 @@ textarea:focus-visible {
   padding: 2rem 1.25rem;
   position: relative;
 }
+
+@supports (min-height: 100dvh) {
+  .auth-wrap {
+    min-height: 100dvh;
+  }
+}
+
 .auth-wrap::before {
   content: '';
   position: absolute;
@@ -894,6 +1169,12 @@ textarea:focus-visible {
   border-radius: var(--r-lg);
   padding: 2.25rem 2rem;
   box-shadow: 0 30px 80px -40px rgba(0, 0, 0, 0.8);
+}
+
+@media (max-width: 480px) {
+  .auth-card {
+    padding: 1.75rem 1.25rem;
+  }
 }
 
 .auth-brand {
@@ -968,6 +1249,13 @@ textarea:focus-visible {
   gap: 0.75rem;
 }
 
+@media (max-width: 480px) {
+  .shared-card {
+    padding: 1.75rem 1.25rem;
+    margin-top: 2rem;
+  }
+}
+
 .shared-icon {
   display: inline-flex;
   align-items: center;
@@ -1022,6 +1310,18 @@ textarea:focus-visible {
 
   .preview-url {
     display: none;
+  }
+
+  .bento {
+    gap: 0.85rem;
+  }
+
+  .bento-cell {
+    padding: 1.4rem;
+  }
+
+  .page-glow::before {
+    width: 100%;
   }
 }
 
@@ -1391,6 +1691,19 @@ textarea:focus-visible {
   overflow-x: auto;
   color: var(--text-muted);
 }
+
+.code-block > div:first-of-type {
+  padding-right: 5.5rem;
+}
+
+@media (max-width: 480px) {
+  .code-block {
+    padding: 1.25rem 1.15rem;
+  }
+  .code-block > div:first-of-type {
+    padding-right: 5.5rem;
+  }
+}
 .code-block .tok-c { color: var(--text-dim); }
 .code-block .tok-k { color: var(--accent-strong); }
 .code-block .tok-s { color: #7dd3fc; }
@@ -1581,4 +1894,24 @@ textarea:focus-visible {
   .section-pad { padding: 4.5rem 1.25rem; }
   .ticker-track { animation-duration: 22s; }
   .preview-side { display: none; }
+}
+
+@media (max-width: 600px) {
+  .footer-grid { grid-template-columns: 1fr; gap: 2rem; }
+  .footer-bottom { flex-direction: column; align-items: flex-start; }
+  .footer-bottom .row { flex-wrap: wrap; gap: 1rem; }
+  .hero-split { padding-top: 2.5rem; }
+  .hero-title { font-size: clamp(2.4rem, 11vw, 3.2rem); }
+  .hero-sub { font-size: 1rem; }
+  .hero-cta { width: 100%; }
+  .hero-cta .btn { flex: 1 1 100%; }
+  .sticky-card { padding: 1.5rem; top: 76px; }
+  .sticky-stack { gap: 2.25rem; }
+  .cta-band-big { padding: 3.5rem 1.25rem; }
+  .quote-card { padding: 1.4rem; }
+  .price-card { padding: 1.6rem; }
+  .faq-q { padding: 1rem 1.05rem; }
+  .faq-a { padding: 0 1.05rem 1rem; }
+  .format-strip { margin-top: 1.75rem; }
+  .eyebrow-pill { white-space: normal; }
 }

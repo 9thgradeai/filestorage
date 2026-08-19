@@ -72,7 +72,7 @@ export default function SharedFilePage() {
         {error ? (
           <div className="shared-card">
             <span className="file-type">
-              <WarningCircle size={22} weight="duotone" />
+              <WarningCircle size={22} weight="duotone" aria-hidden="true" />
             </span>
             <h1 className="heading" style={{ fontSize: '1.2rem' }}>
               Link not available
@@ -104,11 +104,11 @@ export default function SharedFilePage() {
             <div className="row mt-4" style={{ justifyContent: 'center' }}>
               <button className="btn btn-primary" onClick={download} disabled={downloading}>
                 {downloading ? 'Downloading…' : 'Download File'}
-                {!downloading && <DownloadSimple size={16} weight="bold" />}
+                {!downloading && <DownloadSimple size={16} weight="bold" aria-hidden="true" />}
               </button>
             </div>
             <p className="auth-note">
-              <LockSimple size={11} weight="bold" /> STREAMED FROM S3 OVER TLS
+              <LockSimple size={11} weight="bold" aria-hidden="true" /> STREAMED FROM S3 OVER TLS
             </p>
           </div>
         ) : (

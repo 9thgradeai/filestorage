@@ -52,7 +52,7 @@ export default function Faq() {
                     onClick={() => setOpen(isOpen ? null : i)}
                   >
                     {f.q}
-                    <CaretDown className="faq-chevron" size={16} weight="bold" />
+                    <CaretDown className="faq-chevron" size={16} weight="bold" aria-hidden="true" />
                   </button>
                   <AnimatePresence initial={false}>
                     {isOpen && (

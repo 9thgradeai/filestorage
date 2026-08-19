@@ -25,12 +25,22 @@ export const metadata = {
     'Encrypted file storage with expiring share links, magic-byte validation, and rotating HttpOnly-cookie sessions. Security you can verify.',
 };
 
+export const viewport = {
+  width: 'device-width',
+  initialScale: 1,
+};
+
 export default function RootLayout({ children }: { children: ReactNode }) {
   return (
     <html lang="en" className={`${geistSans.variable} ${geistMono.variable}`}>
       <body>
+        <a href="#main" className="skip-link">
+          Skip to content
+        </a>
         <AuthProvider>
-          <main className="min-h-screen">{children}</main>
+          <main id="main" className="min-h-screen">
+            {children}
+          </main>
         </AuthProvider>
         <ToasterProvider />
       </body>

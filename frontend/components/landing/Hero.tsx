@@ -36,7 +36,7 @@ export default function Hero() {
           transition={{ duration: 0.6, ease: EASE }}
           className="eyebrow-pill"
         >
-          <LockSimple size={12} weight="bold" />
+          <LockSimple size={12} weight="bold" aria-hidden="true" />
           Encrypted · Magic-byte validated
         </motion.div>
 
@@ -71,7 +71,7 @@ export default function Hero() {
             style={{ fontSize: '1rem', padding: '0.85rem 1.6rem' }}
           >
             {user ? 'Open dashboard' : 'Get started'}
-            <ArrowRight size={16} weight="bold" />
+            <ArrowRight size={16} weight="bold" aria-hidden="true" />
           </Link>
           <Link
             href="/login"

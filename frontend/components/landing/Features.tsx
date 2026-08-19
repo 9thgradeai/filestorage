@@ -19,7 +19,7 @@ export default function Features() {
         <div className="bento">
           <Reveal className="bento-wide">
             <div className="bento-cell cell-glow">
-              <span className="bento-icon">
+              <span className="bento-icon" aria-hidden="true">
                 <Fingerprint size={20} weight="duotone" />
               </span>
               <h3>Content-aware validation</h3>
@@ -40,7 +40,7 @@ export default function Features() {
 
           <Reveal className="bento-tall" delay={0.08}>
             <div className="bento-cell">
-              <span className="bento-icon">
+              <span className="bento-icon" aria-hidden="true">
                 <ArrowsClockwise size={20} weight="duotone" />
               </span>
               <h3>Rotating sessions</h3>
@@ -58,7 +58,7 @@ export default function Features() {
 
           <Reveal className="bento-tall" delay={0.08}>
             <div className="bento-cell">
-              <span className="bento-icon">
+              <span className="bento-icon" aria-hidden="true">
                 <Hourglass size={20} weight="duotone" />
               </span>
               <h3>Expiring shares</h3>
@@ -75,7 +75,7 @@ export default function Features() {
 
           <Reveal className="bento-wide" delay={0.08}>
             <div className="bento-cell">
-              <span className="bento-icon">
+              <span className="bento-icon" aria-hidden="true">
                 <ShieldCheck size={20} weight="duotone" />
               </span>
               <h3>Encrypted at rest</h3>

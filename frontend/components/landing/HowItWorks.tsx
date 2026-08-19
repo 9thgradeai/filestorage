@@ -33,7 +33,7 @@ export default function HowItWorks() {
             {STEPS.map((s) => (
               <div key={s.num} className="step">
                 <span className="step-num">
-                  <s.icon size={15} weight="bold" /> {s.num}
+                  <s.icon size={15} weight="bold" aria-hidden="true" /> {s.num}
                 </span>
                 <h3>{s.title}</h3>
                 <p>{s.body}</p>

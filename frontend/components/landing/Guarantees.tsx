@@ -38,7 +38,7 @@ export default function Guarantees() {
           {ITEMS.map((item, i) => (
             <Reveal key={item.title} delay={i * 0.08}>
               <div className="guarantee">
-                <span className="bento-icon">
+                <span className="bento-icon" aria-hidden="true">
                   <item.icon size={20} weight="duotone" />
                 </span>
                 <h3>{item.title}</h3>

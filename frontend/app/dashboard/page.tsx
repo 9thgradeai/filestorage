@@ -209,7 +209,9 @@ export default function DashboardPage() {
           <Brand />
         </Link>
         <div className="nav-links">
-          <span className="brand-mono">{user?.name || user?.email}</span>
+          <span className="brand-mono" title={user?.name || user?.email}>
+            {user?.name || user?.email}
+          </span>
           <button
             className="btn btn-ghost btn-sm"
             aria-label="Logout"
@@ -218,8 +220,8 @@ export default function DashboardPage() {
               router.push('/');
             }}
           >
-            <SignOut size={15} weight="bold" />
-            Logout
+            <SignOut size={15} weight="bold" aria-hidden="true" />
+            <span className="logout-label">Logout</span>
           </button>
         </div>
       </nav>
@@ -250,7 +252,7 @@ export default function DashboardPage() {
                 <>Uploading {progress}%</>
               ) : (
                 <>
-                  <CloudArrowUp size={17} weight="bold" />
+                  <CloudArrowUp size={17} weight="bold" aria-hidden="true" />
                   Upload File
                 </>
               )}
@@ -273,7 +275,7 @@ export default function DashboardPage() {
         ) : files.length === 0 ? (
           <div className="dashboard-empty">
             <span className="empty-icon">
-              <Files size={26} weight="duotone" />
+              <Files size={26} weight="duotone" aria-hidden="true" />
             </span>
             <div>
               <h3 className="heading" style={{ fontSize: '1.15rem' }}>
@@ -285,7 +287,7 @@ export default function DashboardPage() {
               </p>
             </div>
             <label htmlFor="file-upload" className="btn btn-primary">
-              <UploadSimple size={16} weight="bold" />
+              <UploadSimple size={16} weight="bold" aria-hidden="true" />
               Upload your first file
             </label>
           </div>
@@ -320,7 +322,7 @@ export default function DashboardPage() {
                       aria-label="Download"
                       title="Download"
                     >
-                      <DownloadSimple size={15} weight="bold" />
+                      <DownloadSimple size={15} weight="bold" aria-hidden="true" />
                     </button>
                     <button
                       className="btn btn-secondary btn-sm"
@@ -329,9 +331,9 @@ export default function DashboardPage() {
                       title={f.is_public ? 'Make private' : 'Make public'}
                     >
                       {f.is_public ? (
-                        <EyeSlash size={15} weight="bold" />
+                        <EyeSlash size={15} weight="bold" aria-hidden="true" />
                       ) : (
-                        <Eye size={15} weight="bold" />
+                        <Eye size={15} weight="bold" aria-hidden="true" />
                       )}
                     </button>
                     {f.is_public && (
@@ -341,7 +343,7 @@ export default function DashboardPage() {
                         aria-label="Copy share link"
                         title="Copy share link"
                       >
-                        <LinkSimple size={15} weight="bold" />
+                        <LinkSimple size={15} weight="bold" aria-hidden="true" />
                       </button>
                     )}
                     <span style={{ flex: 1 }} />
@@ -351,7 +353,7 @@ export default function DashboardPage() {
                       aria-label="Delete"
                       title="Delete"
                     >
-                      <TrashSimple size={15} weight="bold" />
+                      <TrashSimple size={15} weight="bold" aria-hidden="true" />
                     </button>
                   </div>
                 </div>
