@@ -2,17 +2,19 @@
 
 A full-stack, production-grade file storage service.
 
-- **Backend** — Express + TypeScript + PostgreSQL + AWS S3 (`backend/`)
+- **Backend** — Express + TypeScript + PostgreSQL (`backend/`), with pluggable
+  storage: local disk (Railway volume / Docker named volume) **or** AWS S3.
 - **Frontend** — Next.js 16 (App Router) + React 19 (`frontend/`)
-- **Infra** — Docker Compose, GitHub Actions CI/CD
+- **Infra** — Docker Compose, GitHub Actions CI/CD, production on Railway
+  (backend + Postgres) and Vercel (frontend).
 
 ## Features
 
 - Cookie-based auth: JWT access token (15 min) + rotating, DB-backed refresh
   token (7 days), both `HttpOnly`/`SameSite=Lax`; double-submit CSRF protection.
 - Files uploaded via a temp-file pipeline, validated by **magic bytes**
-  (never trusting the client MIME/extension), then streamed to **private,
-  SSE-encrypted S3** without buffering in RAM (up to 100 MB).
+  (never trusting the client MIME/extension), then streamed to storage
+  (local disk or SSE-encrypted S3) without buffering in RAM (up to 100 MB).
 - Public share links with expiry (7 days); unauthenticated streaming forces
   `attachment` + `nosniff` so untrusted content cannot render inline.
 - Paginated file listing, structured `pino` logging, DB-aware health check,
@@ -26,19 +28,24 @@ A full-stack, production-grade file storage service.
 
 ```
 Browser ──► Next.js frontend (:3000)
-              │  /api/* proxied (rewrite → API_BACKEND_URL)
+              │  /api/* rewritten (API_BACKEND_URL)
               ▼
             Express API (:5000) ──► PostgreSQL (:5432)
-                                  └─► AWS S3 (private, SSE-AES256)
+                                  └─► Storage driver
+                                      ├─ local disk (STORAGE_DRIVER=local)
+                                      └─ AWS S3 (private, SSE-AES256)
 ```
 
 The frontend calls `/api/*` on its own origin; Next rewrites those to the
 backend. This keeps everything same-origin (no CORS in production) and lets
-`SameSite=Lax` cookies work naturally.
+`SameSite=Lax` cookies work naturally. On Vercel the rewrite is handled at the
+platform layer (not an edge function), so uploads up to the 100 MB cap stream
+end-to-end.
 
 ## Getting started (local)
 
-Prerequisites: Node 20+, a local PostgreSQL instance, and AWS credentials.
+Prerequisites: Node 20+ and a local PostgreSQL instance. For storage you can
+use the built-in **local driver** (no AWS account needed) or AWS S3.
 
 ### 1. Database
 
@@ -50,7 +57,9 @@ psql -U postgres -c "CREATE DATABASE filestorage;"
 
 ```bash
 cd backend
-cp .env.example .env        # edit DB_* / JWT_SECRET / AWS_*
+cp .env.example .env        # edit DB_* / JWT_SECRET; for local storage set
+                            # STORAGE_DRIVER=local (default) — AWS_* only if
+                            # STORAGE_DRIVER=s3
 npm install
 npm run db:migrate          # apply versioned migrations
 npm run dev                 # or: npm run build && npm start
@@ -69,13 +78,51 @@ npm run dev                 # http://localhost:3000
 
 ```bash
 # JWT_SECRET is required (interpolated with :? so compose fails fast if missing)
-JWT_SECRET='a-very-long-secure-random-value-32-chars' \
+# Local storage needs no AWS credentials (a named volume persists /data):
+JWT_SECRET='a-very-long-secure-random-value-32-chars' docker compose up --build
+
+# ...or switch to S3:
+JWT_SECRET='a-very-long-secure-random-value-32-chars' STORAGE_DRIVER=s3 \
 AWS_ACCESS_KEY_ID='...' AWS_SECRET_ACCESS_KEY='...' \
 S3_BUCKET_NAME='your-bucket' docker compose up --build
 ```
 
 - Backend applies migrations automatically on container start.
-- Frontend proxies `/api` to the `backend` service via runtime `API_BACKEND_URL`.
+- Frontend proxies `/api` to the `backend` service — the rewrite target is
+  passed as a build arg (`API_BACKEND_URL`) so it works with `npm start`.
+
+## Production deployment (Railway + Vercel)
+
+The live production stack runs the backend and Postgres on Railway and the
+frontend on Vercel, with `API_BACKEND_URL` baked into Next.js rewrites so the
+browser never leaves the frontend origin (no CORS; `SameSite=Lax` cookies work).
+
+### Backend — Railway
+
+1. `railway init --name <project>` and add a **Postgres** plugin and a
+   **backend** service connected to the repo (`rootDirectory: ./backend`).
+2. Add a volume (e.g. `backend-volume`) mounted at `/data` for file storage.
+3. Set service variables:
+   ```
+   JWT_SECRET=<long random hex>
+   NODE_ENV=production
+   STORAGE_DRIVER=local
+   STORAGE_DIR=/data
+   DATABASE_URL=${{Postgres.DATABASE_URL}}
+   FRONTEND_URL=<frontend https URL>
+   PUBLIC_FILE_BASE_URL=<frontend https URL>
+   ```
+4. Deploy: `railway redeploy --service backend --from-source --yes`. The
+   Dockerfile runs migrations, then starts the API.
+
+### Frontend — Vercel
+
+1. `vercel link --project <name>` and set the Production env var
+   `API_BACKEND_URL` to the backend's public URL (e.g.
+   `https://<backend>.up.railway.app`).
+2. `vercel --prod --yes`. The `rewrites()` in `next.config.js` route `/api/*`
+   to the backend at Vercel's platform layer — large uploads up to 100 MB
+   stream through without hitting the edge-function 4.5 MB limit.
 
 ## Testing & quality
 
@@ -108,7 +155,7 @@ typecheck and a coverage gate.
 | GET    | `/api/files?page=&limit=`             | ✓     | Paginated list                         |
 | GET    | `/api/files/:id`                      | ✓     | Metadata                               |
 | GET    | `/api/files/:id/download`             | ✓     | Streams file bytes                     |
-| DELETE | `/api/files/:id`                      | ✓*    | Deletes S3 object + metadata           |
+| DELETE | `/api/files/:id`                      | ✓*    | Deletes stored file + metadata           |
 | PUT    | `/api/files/:id/toggle-public`        | ✓*    | Public/private toggle                  |
 | POST   | `/api/files/:id/share`                | ✓*    | Generates expiring share token         |
 | GET    | `/api/files/public/:token/info`       | —     | Safe metadata for the shared page      |
@@ -133,9 +180,9 @@ clients), cookie-based requests must send the CSRF header (browsers).
 - **Migrations** are versioned and idempotent; `schema_migrations` tracks
   applied files, each in its own transaction.
 - **Dependencies** are audited clean (0 known vulnerabilities). The frontend
-  runs Next 16 + React 19 with ESLint flat config; `/api` calls are proxied at
-  runtime by a Next proxy (`proxy.ts`) so `API_BACKEND_URL` can differ per
-  environment without a rebuild.
+  runs Next 16 + React 19 with ESLint flat config; `/api` calls are rewritten
+  to `API_BACKEND_URL` (baked in at build time, so it differs per environment
+  without code changes).
 
 ## Project layout
 
@@ -155,7 +202,7 @@ backend/
 frontend/
   app/                 Next.js App Router pages (login/register/dashboard/shared)
   lib/                 auth context, api client (CSRF + refresh), toaster
-  Dockerfile           Next standalone output
+  Dockerfile           multi-stage, non-standalone `next start`
 docker-compose.yml     db + backend + frontend
-.github/workflows/     CI/CD: backend tests/coverage, frontend lint/build, Docker push
+.github/workflows/     CI/CD: backend tests/coverage + frontend lint/build
 ```

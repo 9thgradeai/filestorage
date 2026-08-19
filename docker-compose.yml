@@ -54,12 +54,15 @@ services:
   frontend:
     build:
       context: ./frontend
+      args:
+        # Baked into Next.js rewrites at build time (replaces the runtime proxy).
+        API_BACKEND_URL: ${API_BACKEND_URL:-http://backend:5000}
     restart: unless-stopped
     depends_on:
       - backend
     environment:
-      # Server-side rewrite proxy → backend service (runtime env, no rebuild).
-      API_BACKEND_URL: http://backend:5000
+      # Runtime env for the Next server (health checks, etc.).
+      API_BACKEND_URL: ${API_BACKEND_URL:-http://backend:5000}
     ports:
       - '3000:3000'
 
