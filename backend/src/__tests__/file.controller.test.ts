@@ -202,7 +202,7 @@ describe('File Controller', () => {
         .set('Authorization', `Bearer ${authToken}`)
         .expect(StatusCodes.OK);
 
-      expect(res.body.message).toContain('deleted successfully');
+      expect(res.body.message).toContain('deleted permanently');
     });
 
     it('should not delete another user\'s file', async () => {

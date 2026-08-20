@@ -1,3 +1,4 @@
+/// <reference path="./types/express.d.ts" />
 import express from 'express';
 import cors from 'cors';
 import helmet from 'helmet';
@@ -6,6 +7,8 @@ import rateLimit from 'express-rate-limit';
 import dotenv from 'dotenv';
 import authRoutes from './routes/auth.routes';
 import fileRoutes from './routes/file.routes';
+import folderRoutes from './routes/folder.routes';
+import aiRoutes from './routes/ai.routes';
 import { errorHandler } from './middleware/errorHandler';
 import { pool } from './config/database';
 import { validateEnv } from './config/env';
@@ -81,8 +84,9 @@ app.use(cookieParser());
 // Routes
 app.use('/api/auth', authRoutes);
 app.use('/api/files', fileRoutes);
+app.use('/api/folders', folderRoutes);
 
-// Health check endpoint (DB-aware so load balancers can drain unhealthy nodes).
+app.use('/api/ai', aiRoutes);
 app.get('/api/health', async (_req, res) => {
   try {
     await pool.query('SELECT 1');

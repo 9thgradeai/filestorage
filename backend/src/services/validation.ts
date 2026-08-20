@@ -83,3 +83,37 @@ export const validateTogglePublic = (data: { is_public?: unknown }) =>
   Joi.object({
     is_public: Joi.boolean().required(),
   }).validate(data, { abortEarly: false });
+
+const folderNameSchema = Joi.string()
+  .trim()
+  .min(1)
+  .max(255)
+  .pattern(/[^\u0000-\u001f]/)
+  .required();
+
+const nullableFolderId = Joi.number().integer().min(1).allow(null);
+
+export const validateCreateFolder = (data: { name?: string; parent_id?: unknown }) =>
+  Joi.object({
+    name: folderNameSchema,
+    parent_id: nullableFolderId.optional().default(null),
+  }).validate(data, { abortEarly: false });
+
+export const validateUpdateFolder = (data: { name?: string; parent_id?: unknown }) =>
+  Joi.object({
+    name: folderNameSchema.optional(),
+    parent_id: nullableFolderId.optional(),
+  }).validate(data, { abortEarly: false });
+
+const fileNameSchema = Joi.string().trim().min(1).max(255).required();
+
+export const validateUpdateFile = (data: { original_filename?: string; parent_id?: unknown }) =>
+  Joi.object({
+    original_filename: fileNameSchema.optional(),
+    parent_id: nullableFolderId.optional(),
+  }).validate(data, { abortEarly: false });
+
+export const validateStarFile = (data: { starred?: unknown }) =>
+  Joi.object({
+    starred: Joi.boolean().required(),
+  }).validate(data, { abortEarly: false });

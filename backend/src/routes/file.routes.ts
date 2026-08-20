@@ -9,12 +9,18 @@ import {
   uploadFile,
   listFiles,
   getFile,
+  updateFile,
+  starFile,
+  trashFile,
+  restoreFile,
   deleteFile,
   togglePublic,
   downloadFile,
   getPublicFile,
   getPublicFileInfo,
   generateShareLink,
+  getStats,
+  getRecent,
 } from '../controllers/file.controller';
 import { MAX_FILE_SIZE } from '../services/fileValidation';
 import { randomHex } from '../utils/crypto';
@@ -38,8 +44,17 @@ const upload = multer({
 // Mutations are cookie-session driven, so they are CSRF-protected AFTER the
 // user is authenticated (unauthorized requests still surface as 401).
 router.post('/upload', authenticate, csrfProtect, upload.single('file'), uploadFile);
+
+// Collection endpoints must precede the /:id route below.
+router.get('/stats', authenticate, getStats);
+router.get('/recent', authenticate, getRecent);
 router.get('/', authenticate, listFiles);
+
 router.get('/:id', authenticate, getFile);
+router.put('/:id', authenticate, csrfProtect, updateFile);
+router.post('/:id/star', authenticate, csrfProtect, starFile);
+router.post('/:id/trash', authenticate, csrfProtect, trashFile);
+router.post('/:id/restore', authenticate, csrfProtect, restoreFile);
 router.delete('/:id', authenticate, csrfProtect, deleteFile);
 router.put('/:id/toggle-public', authenticate, csrfProtect, togglePublic);
 router.get('/:id/download', authenticate, downloadFile);
