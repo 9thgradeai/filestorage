@@ -7,7 +7,10 @@ jest.mock('../services/s3.service', () => ({
   s3Delete: jest.fn(async () => {}),
   s3Download: jest.fn(async () => {
     const { Readable } = require('stream');
-    return Readable.from([Buffer.from('mock file body')]);
+    // Must match the content uploaded by file.controller.test.ts so the
+    // download assertion is identical under both the S3 driver (CI, where
+    // this mock is used) and the local driver (dev, where bytes come from disk).
+    return Readable.from([Buffer.from('Public file content')]);
   }),
   generateShareableLink: jest.fn(async () => 'https://mock-signed-url'),
 }));

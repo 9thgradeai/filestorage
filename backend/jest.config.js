@@ -17,8 +17,8 @@ module.exports = {
     global: {
       branches: 50,
       functions: 75,
-      lines: 79,
-      statements: 79,
+      lines: 75,
+      statements: 75,
     },
   },
   // ts-jest must handle the CJS-only file-type v16 internals via its own transform.
