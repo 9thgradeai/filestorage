@@ -19,6 +19,8 @@ import FileGrid, { type FileAction } from '../../components/drive/FileGrid';
 import UploadQueue, { type UploadItem } from '../../components/drive/UploadQueue';
 import PreviewModal from '../../components/drive/PreviewModal';
 import DriveDialogs, { type DialogState } from '../../components/drive/DriveDialogs';
+import ChatButton from '../../components/ai/ChatButton';
+import ChatModal from '../../components/ai/ChatModal';
 
 const MAX_FILE_SIZE = 100 * 1024 * 1024;
 const PAGE_SIZE = 60;
@@ -77,7 +79,10 @@ export default function DashboardPage() {
           setPagination({ page: 1, limit: 30, total: data.files.length, totalPages: 1 });
         } else {
           const data = await driveApi.listFiles({
-            folderId: mode === 'folder' ? folderId : null,
+            // Starred/Trash are global views: omit the folder filter so files
+            // nested in subfolders appear too (null would restrict to root).
+            folderId:
+              mode === 'folder' ? folderId : mode === 'all' ? null : undefined,
             q: search || undefined,
             starred: mode === 'starred' ? true : undefined,
             trashed: mode === 'trash' ? true : undefined,
@@ -339,6 +344,21 @@ export default function DashboardPage() {
     [refreshFolders, refreshStats, reload]
   );
 
+  const restoreFolder = useCallback(
+    async (f: Folder) => {
+      try {
+        await driveApi.restoreFolder(f.id);
+        toast.success('Folder restored');
+        refreshFolders();
+        refreshStats();
+        reload();
+      } catch (err: any) {
+        toast.error(err.message || 'Action failed');
+      }
+    },
+    [refreshFolders, refreshStats, reload]
+  );
+
   const confirmDelete = useCallback(
     async (target: { type: 'file' | 'folder'; id: number }) => {
       try {
@@ -444,6 +464,7 @@ export default function DashboardPage() {
         onRenameFolder={(f) => setDialog({ kind: 'renameFolder', folder: f })}
         onMoveFolder={(f) => setDialog({ kind: 'moveFolder', folder: f })}
         onTrashFolder={trashFolder}
+        onRestoreFolder={restoreFolder}
         onDeleteFolder={(f) => setDialog({ kind: 'confirmDelete', folder: f })}
         onLogout={() => {
           logout();
@@ -608,6 +629,9 @@ export default function DashboardPage() {
         onMakePublic={makePublic}
         onGenerateShare={generateShare}
       />
+
+      <ChatButton />
+      <ChatModal />
     </div>
   );
 }

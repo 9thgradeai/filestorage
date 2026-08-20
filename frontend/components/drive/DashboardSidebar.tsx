@@ -30,6 +30,7 @@ interface Props {
   onRenameFolder: (f: Folder) => void;
   onMoveFolder: (f: Folder) => void;
   onTrashFolder: (f: Folder) => void;
+  onRestoreFolder: (f: Folder) => void;
   onDeleteFolder: (f: Folder) => void;
   onLogout: () => void;
 }
@@ -52,6 +53,7 @@ export default function DashboardSidebar({
   onRenameFolder,
   onMoveFolder,
   onTrashFolder,
+  onRestoreFolder,
   onDeleteFolder,
   onLogout,
 }: Props) {
@@ -136,9 +138,14 @@ export default function DashboardSidebar({
                 Move
               </button>
               {folder.trashed_at ? (
-                <button onClick={() => { onDeleteFolder(folder); setMenuFor(null); }}>
-                  Delete forever
-                </button>
+                <>
+                  <button onClick={() => { onRestoreFolder(folder); setMenuFor(null); }}>
+                    Restore
+                  </button>
+                  <button onClick={() => { onDeleteFolder(folder); setMenuFor(null); }}>
+                    Delete forever
+                  </button>
+                </>
               ) : (
                 <button onClick={() => { onTrashFolder(folder); setMenuFor(null); }}>
                   Move to trash

@@ -12,6 +12,12 @@ export default function ChatModal() {
   const [input, setInput] = useState('');
   const sendRef = useRef<HTMLTextAreaElement>(null);
 
+  useEffect(() => {
+    const toggle = () => setOpen((o) => !o);
+    window.addEventListener('ai:toggle', toggle);
+    return () => window.removeEventListener('ai:toggle', toggle);
+  }, []);
+
   const sendMessage = async (e: React.FormEvent) => {
     e.preventDefault();
     if (!input.trim()) return;
@@ -35,7 +41,9 @@ export default function ChatModal() {
 
   return (
     <div
-      className="fixed inset-0 bg-black/40 backdrop-blur-zxl z-50 hidden items-center justify-center"
+      className={`fixed inset-0 bg-black/40 backdrop-blur-sm z-50 items-center justify-center ${
+        open ? 'flex' : 'hidden'
+      }`}
       id="ai-modal-backdrop"
       onClick={(e) => e.target === e.currentTarget && setOpen(false)}
     >
@@ -63,13 +71,17 @@ export default function ChatModal() {
               </svg>
             </button>
           </div>
-          <div className="flex-1 p-4 overflow-y-auto">
-            {messages.map((msg) => (
+          <div className="flex-1 p-4 overflow-y-auto space-y-2">
+            {messages.map((msg, i) => (
               <div
-                key={msg.content}
-                className="p-3 rounded flex items-start"
+                key={i}
+                className={`p-3 rounded text-sm ${
+                  msg.role === 'user'
+                    ? 'bg-primary text-primary-foreground ml-8'
+                    : 'bg-accent text-accent-foreground mr-8'
+                }`}
               >
-                <span className="font-medium">{msg.content}</span>
+                {msg.content}
               </div>
             ))}
           </div>
@@ -84,7 +96,7 @@ export default function ChatModal() {
               aria-label="Message AI assistant"
               required
             ></textarea>
-            <button type="submit" className="mt-2 hidden sm:inline-block px-3 py-1 bg-primary text-primary-foreground rounded">
+            <button type="submit" className="mt-2 px-3 py-1 bg-primary text-primary-foreground rounded">
               Send
             </button>
           </form>
