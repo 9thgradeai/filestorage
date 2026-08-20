@@ -18,8 +18,6 @@ import DriveToolbar, { type Crumb } from '../../components/drive/DriveToolbar';
 import FileGrid, { type FileAction } from '../../components/drive/FileGrid';
 import UploadQueue, { type UploadItem } from '../../components/drive/UploadQueue';
 import PreviewModal from '../../components/drive/PreviewModal';
-import ChatButton from '../../components/ai/ChatButton';
-import ChatModal from '../../components/ai/ChatModal';
 import DriveDialogs, { type DialogState } from '../../components/drive/DriveDialogs';
 
 const MAX_FILE_SIZE = 100 * 1024 * 1024;
