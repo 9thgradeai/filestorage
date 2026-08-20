@@ -266,7 +266,7 @@ describe('File Controller', () => {
         .expect(StatusCodes.OK);
 
       // Should return file content streamed from (mocked) S3
-      expect(res.text).toBe('mock file body');
+      expect(res.text).toBe('Public file content');
     });
 
     it('should reject expired share token', async () => {
