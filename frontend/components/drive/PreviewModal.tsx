@@ -2,6 +2,7 @@
 
 import { useEffect, useState } from 'react';
 import { X, DownloadSimple, Star, File } from '@phosphor-icons/react';
+import toast from 'react-hot-toast';
 import { FileTypeIcon } from '../FileTypeIcon';
 import { formatBytes } from '../../lib/format';
 import { driveApi, type DriveFile } from '../../lib/drive';
@@ -132,7 +133,7 @@ export default function PreviewModal({ file, onClose, onStarred }: Props) {
                 a.click();
                 setTimeout(() => URL.revokeObjectURL(url), 4000);
               } catch {
-                // toast handled by parent via action
+                toast.error('Download failed');
               }
             }}
           >

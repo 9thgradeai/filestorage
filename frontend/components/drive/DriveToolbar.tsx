@@ -1,6 +1,7 @@
 'use client';
 
 import { useEffect, useRef, useState } from 'react';
+import Link from 'next/link';
 import {
   MagnifyingGlass,
   CaretDown,
@@ -10,6 +11,8 @@ import {
   Plus,
   CloudArrowUp,
   HouseSimple,
+  SignOut,
+  GearSix,
 } from '@phosphor-icons/react';
 import type { FileTypeFilter } from '../../lib/drive';
 
@@ -34,6 +37,8 @@ interface Props {
   onUpload: (files: File[]) => void;
   sidebarOpen: boolean;
   onToggleSidebar: () => void;
+  userName: string;
+  onLogout: () => void;
 }
 
 const SORT_OPTIONS: { label: string; sort: string; order: string }[] = [
@@ -84,15 +89,30 @@ export default function DriveToolbar({
   onUpload,
   sidebarOpen,
   onToggleSidebar,
+  userName,
+  onLogout,
 }: Props) {
   const fileInputRef = useRef<HTMLInputElement>(null);
   const [searchDraft, setSearchDraft] = useState(search);
   const debouncedSearch = useDebounced(searchDraft, 260);
+  const [userMenuOpen, setUserMenuOpen] = useState(false);
+  const userMenuRef = useRef<HTMLDivElement>(null);
 
   useEffect(() => {
     onSearch(debouncedSearch);
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [debouncedSearch]);
+
+  useEffect(() => {
+    if (!userMenuOpen) return;
+    const handleClick = (e: MouseEvent) => {
+      if (userMenuRef.current && !userMenuRef.current.contains(e.target as Node)) {
+        setUserMenuOpen(false);
+      }
+    };
+    document.addEventListener('mousedown', handleClick);
+    return () => document.removeEventListener('mousedown', handleClick);
+  }, [userMenuOpen]);
 
   const currentSort =
     SORT_OPTIONS.find((o) => o.sort === sort && o.order === order) || SORT_OPTIONS[0];
@@ -214,6 +234,33 @@ export default function DriveToolbar({
             <CloudArrowUp size={15} weight="bold" />
             <span className="drive-hide-sm">Upload</span>
           </button>
+
+          <div className="drive-user-menu" ref={userMenuRef}>
+            <button
+              className="drive-user-btn"
+              onClick={() => setUserMenuOpen(!userMenuOpen)}
+              aria-label="User menu"
+              aria-expanded={userMenuOpen}
+            >
+              <span className="drive-user-avatar-sm">{userName.charAt(0).toUpperCase()}</span>
+              <CaretDown size={11} weight="bold" />
+            </button>
+            {userMenuOpen && (
+              <div className="drive-user-dropdown">
+                <div className="drive-user-dropdown-header">
+                  <span className="drive-user-avatar-sm">{userName.charAt(0).toUpperCase()}</span>
+                  <span className="drive-user-dropdown-name">{userName}</span>
+                </div>
+                <hr className="drive-user-dropdown-divider" />
+                <Link href="/settings" className="drive-user-dropdown-item" onClick={() => setUserMenuOpen(false)}>
+                  <GearSix size={15} weight="bold" /> Settings
+                </Link>
+                <button className="drive-user-dropdown-item danger" onClick={() => { setUserMenuOpen(false); onLogout(); }}>
+                  <SignOut size={15} weight="bold" /> Logout
+                </button>
+              </div>
+            )}
+          </div>
         </div>
       </div>
     </div>

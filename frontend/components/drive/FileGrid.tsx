@@ -416,48 +416,50 @@ function FileContextMenu({
         onClick={(e) => e.stopPropagation()}
         ref={menuRef}
         style={{ position: 'fixed', top: pos.top, left: pos.left }}
+        role="menu"
+        aria-label="File actions"
       >
       {inTrash ? (
         <>
-          <button onClick={() => { onFileAction('restore', file); onClose(); }}>
+          <button role="menuitem" onClick={() => { onFileAction('restore', file); onClose(); }}>
             <ArrowClockwise size={14} weight="bold" /> Restore
           </button>
-          <button className="danger" onClick={() => { onFileAction('delete', file); onClose(); }}>
+          <button role="menuitem" className="danger" onClick={() => { onFileAction('delete', file); onClose(); }}>
             <TrashSimple size={14} weight="bold" /> Delete forever
           </button>
         </>
       ) : (
         <>
-          <button onClick={() => { onFileAction('preview', file); onClose(); }}>
+          <button role="menuitem" onClick={() => { onFileAction('preview', file); onClose(); }}>
             <Eye size={14} weight="bold" /> Preview
           </button>
-          <button onClick={() => { onFileAction('download', file); onClose(); }}>
+          <button role="menuitem" onClick={() => { onFileAction('download', file); onClose(); }}>
             <DownloadSimple size={14} weight="bold" /> Download
           </button>
-          <button onClick={() => { onFileAction('rename', file); onClose(); }}>
+          <button role="menuitem" onClick={() => { onFileAction('rename', file); onClose(); }}>
             <PencilSimple size={14} weight="bold" /> Rename
           </button>
-          <button onClick={() => { onFileAction('move', file); onClose(); }}>
+          <button role="menuitem" onClick={() => { onFileAction('move', file); onClose(); }}>
             <ArrowsOut size={14} weight="bold" /> Move
           </button>
-          <button onClick={() => { onFileAction(file.starred ? 'unstar' : 'star', file); onClose(); }}>
+          <button role="menuitem" onClick={() => { onFileAction(file.starred ? 'unstar' : 'star', file); onClose(); }}>
             <Star size={14} weight={file.starred ? 'fill' : 'bold'} /> {file.starred ? 'Unstar' : 'Star'}
           </button>
           {file.is_public ? (
-            <button onClick={() => { onFileAction('share', file); onClose(); }}>
+            <button role="menuitem" onClick={() => { onFileAction('share', file); onClose(); }}>
               <LinkSimple size={14} weight="bold" /> Copy link
             </button>
           ) : (
-            <button onClick={() => { onFileAction('makePublic', file); onClose(); }}>
+            <button role="menuitem" onClick={() => { onFileAction('makePublic', file); onClose(); }}>
               <LinkSimple size={14} weight="bold" /> Make public
             </button>
           )}
           {file.is_public && (
-            <button onClick={() => { onFileAction('makePrivate', file); onClose(); }}>
+            <button role="menuitem" onClick={() => { onFileAction('makePrivate', file); onClose(); }}>
               <EyeSlash size={14} weight="bold" /> Make private
             </button>
           )}
-          <button className="danger" onClick={() => { onFileAction('trash', file); onClose(); }}>
+          <button role="menuitem" className="danger" onClick={() => { onFileAction('trash', file); onClose(); }}>
             <TrashSimple size={14} weight="bold" /> Move to trash
           </button>
         </>

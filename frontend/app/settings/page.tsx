@@ -1,6 +1,6 @@
 'use client';
 
-import { useState } from 'react';
+import { useState, useEffect } from 'react';
 import { useRouter } from 'next/navigation';
 import Link from 'next/link';
 import {
@@ -51,6 +51,10 @@ export default function SettingsPage() {
     setNameSet(true);
   }
 
+  useEffect(() => {
+    if (!authLoading && !user) router.replace('/login');
+  }, [authLoading, user, router]);
+
   if (authLoading) {
     return (
       <div className="settings-wrap">
@@ -60,7 +64,6 @@ export default function SettingsPage() {
   }
 
   if (!user) {
-    router.push('/login');
     return null;
   }
 

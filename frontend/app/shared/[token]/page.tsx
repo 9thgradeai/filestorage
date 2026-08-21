@@ -6,6 +6,7 @@ import Link from 'next/link';
 import toast from 'react-hot-toast';
 import { DownloadSimple, WarningCircle, LockSimple } from '@phosphor-icons/react';
 import { downloadFile } from '../../../lib/api';
+import { formatBytes } from '../../../lib/format';
 import { Brand } from '../../../components/Brand';
 import { FileTypeIcon } from '../../../components/FileTypeIcon';
 
@@ -15,14 +16,6 @@ interface SharedInfo {
   file_size: number;
   mime_type: string | null;
   created_at: string;
-}
-
-function formatBytes(bytes: number): string {
-  if (bytes === 0) return '0 B';
-  const k = 1024;
-  const sizes = ['B', 'KB', 'MB', 'GB'];
-  const i = Math.floor(Math.log(bytes) / Math.log(k));
-  return `${parseFloat((bytes / Math.pow(k, i)).toFixed(1))} ${sizes[i]}`;
 }
 
 export default function SharedFilePage() {

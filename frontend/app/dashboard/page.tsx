@@ -298,6 +298,14 @@ export default function DashboardPage() {
     async (action: FileAction) => {
       const targets = files.filter((f) => selected.has(f.id));
       if (targets.length === 0) return;
+
+      if (action === 'delete') {
+        const confirmed = window.confirm(
+          `Permanently delete ${targets.length} file${targets.length !== 1 ? 's' : ''}? This cannot be undone.`
+        );
+        if (!confirmed) return;
+      }
+
       try {
         for (const file of targets) {
           if (action === 'download') {
@@ -532,6 +540,8 @@ export default function DashboardPage() {
           onUpload={uploadFiles}
           sidebarOpen={sidebarOpen}
           onToggleSidebar={() => setSidebarOpen((s) => !s)}
+          userName={user?.name || user?.email || 'User'}
+          onLogout={() => { logout(); router.push('/'); }}
         />
 
         <div className="drive-workspace">

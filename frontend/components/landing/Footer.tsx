@@ -6,15 +6,25 @@ import { Brand } from '../Brand';
 const COLS = [
   {
     title: 'Product',
-    links: ['Features', 'Pricing', 'Security', 'Changelog'],
+    links: [
+      { label: 'Features', href: '/#features' },
+      { label: 'Security', href: '/#security' },
+      { label: 'Pricing', href: '/#pricing' },
+    ],
   },
   {
     title: 'Developers',
-    links: ['API reference', 'Documentation', 'Status', 'Open source'],
+    links: [
+      { label: 'Documentation', href: '#' },
+      { label: 'API Reference', href: '#' },
+    ],
   },
   {
-    title: 'Company',
-    links: ['About', 'Blog', 'Careers', 'Contact'],
+    title: 'Legal',
+    links: [
+      { label: 'Terms of Service', href: '/terms' },
+      { label: 'Privacy Policy', href: '/privacy' },
+    ],
   },
 ];
 
@@ -30,15 +40,15 @@ export default function Footer() {
           <div key={col.title} className="footer-col">
             <h4>{col.title}</h4>
             {col.links.map((l) => (
-              <Link key={l} href="#">
-                {l}
+              <Link key={l.label} href={l.href}>
+                {l.label}
               </Link>
             ))}
           </div>
         ))}
       </div>
       <div className="footer-bottom">
-        <span className="dim text-sm">© 2026 Vault</span>
+        <span className="dim text-sm">&copy; 2026 Vault</span>
         <div className="row" style={{ gap: '1.2rem' }}>
           <Link href="/login" className="link text-sm">
             Sign in
@@ -46,7 +56,7 @@ export default function Footer() {
           <Link href="/register" className="link text-sm">
             Get started
           </Link>
-          <span className="brand-mono">EXPRESS · POSTGRES · S3 · NEXT.JS</span>
+          <span className="brand-mono">EXPRESS &middot; POSTGRES &middot; S3 &middot; NEXT.JS</span>
         </div>
       </div>
     </footer>
