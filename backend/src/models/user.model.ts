@@ -82,4 +82,42 @@ export const UserModel = {
     );
     return rows.length > 0;
   },
+
+  async updateName(userId: number, name: string): Promise<UserRow | undefined> {
+    const { rows } = await pool.query(
+      `UPDATE users SET name = $1, updated_at = NOW()
+       WHERE id = $2
+       RETURNING *`,
+      [name, userId]
+    );
+    return rows[0];
+  },
+
+  async updateEmail(userId: number, newEmail: string): Promise<UserRow | undefined> {
+    const { rows } = await pool.query(
+      `UPDATE users SET email = $1, email_verified_at = NULL, updated_at = NOW()
+       WHERE id = $2
+       RETURNING *`,
+      [normalizeEmail(newEmail), userId]
+    );
+    return rows[0];
+  },
+
+  async updatePassword(userId: number, passwordHash: string): Promise<boolean> {
+    const { rows } = await pool.query(
+      `UPDATE users SET password_hash = $1, updated_at = NOW()
+       WHERE id = $2
+       RETURNING id`,
+      [passwordHash, userId]
+    );
+    return rows.length > 0;
+  },
+
+  async deleteAccount(userId: number): Promise<boolean> {
+    const { rows } = await pool.query(
+      'DELETE FROM users WHERE id = $1 RETURNING id',
+      [userId]
+    );
+    return rows.length > 0;
+  },
 };

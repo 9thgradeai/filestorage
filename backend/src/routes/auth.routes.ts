@@ -9,6 +9,10 @@ import {
   refresh,
   logout,
   me,
+  updateProfile,
+  changePassword,
+  changeEmail,
+  deleteAccount,
 } from '../controllers/auth.controller';
 import { authenticate } from '../middleware/authenticate';
 import { csrfProtect } from '../middleware/csrf';
@@ -27,5 +31,11 @@ router.post('/refresh', refresh);
 // Cookie-authenticated endpoints.
 router.post('/logout', csrfProtect, logout);
 router.get('/me', authenticate, me);
+
+// Profile / settings endpoints (all require auth + CSRF).
+router.put('/profile', authenticate, csrfProtect, updateProfile);
+router.put('/password', authenticate, csrfProtect, changePassword);
+router.put('/email', authenticate, csrfProtect, changeEmail);
+router.put('/delete-account', authenticate, csrfProtect, deleteAccount);
 
 export default router;

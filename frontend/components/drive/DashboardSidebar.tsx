@@ -14,6 +14,7 @@ import {
   DotsThreeVertical,
   SignOut,
   HardDrives,
+  GearSix,
 } from '@phosphor-icons/react';
 import { Brand } from '../Brand';
 import { formatQuota, formatBytes } from '../../lib/format';
@@ -238,6 +239,9 @@ export default function DashboardSidebar({
           <span className="drive-user-name" title={userName}>
             {userName}
           </span>
+          <Link href="/settings" className="btn-icon" aria-label="Settings" title="Settings">
+            <GearSix size={15} weight="bold" />
+          </Link>
           <button className="btn-icon" aria-label="Logout" title="Logout" onClick={onLogout}>
             <SignOut size={15} weight="bold" />
           </button>

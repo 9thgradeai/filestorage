@@ -9,6 +9,9 @@ import {
   validateResendOtp,
   validateForgotPassword,
   validateResetPassword,
+  validateUpdateProfile,
+  validateChangePassword,
+  validateChangeEmail,
 } from '../services/validation';
 import { logger } from '../config/logger';
 import { RefreshTokenModel } from '../models/refreshToken.model';
@@ -302,6 +305,123 @@ export const me = async (req: Request, res: Response) => {
     res.json({ user: getPublicUser(user) });
   } catch (err) {
     logger.error({ err: err }, 'Me error:');
+    res.status(500).json({ message: 'Server error' });
+  }
+};
+
+// @desc Update the user's display name
+export const updateProfile = async (req: Request, res: Response) => {
+  const userId = req.user?.id;
+  if (!userId) return res.status(401).json({ message: 'Unauthorized' });
+
+  const { name } = req.body;
+  const { error } = validateUpdateProfile({ name });
+  if (error) return res.status(400).json({ message: error.details[0].message });
+
+  try {
+    const user = await UserModel.updateName(userId, name.trim());
+    if (!user) return res.status(404).json({ message: 'User not found' });
+    res.json({ user: getPublicUser(user), message: 'Profile updated' });
+  } catch (err) {
+    logger.error({ err: err }, 'Update profile error:');
+    res.status(500).json({ message: 'Server error' });
+  }
+};
+
+// @desc Change the user's password (requires current password)
+export const changePassword = async (req: Request, res: Response) => {
+  const userId = req.user?.id;
+  if (!userId) return res.status(401).json({ message: 'Unauthorized' });
+
+  const { currentPassword, newPassword, confirmPassword } = req.body;
+  const { error } = validateChangePassword({ currentPassword, newPassword, confirmPassword });
+  if (error) return res.status(400).json({ message: error.details[0].message });
+
+  try {
+    const user = await UserModel.findById(userId);
+    if (!user) return res.status(404).json({ message: 'User not found' });
+
+    const isMatch = await bcrypt.compare(currentPassword, user.password_hash);
+    if (!isMatch) return res.status(400).json({ message: 'Current password is incorrect' });
+
+    const rounds = parseInt(process.env.BCRYPT_ROUNDS || '12', 10);
+    const hashedPassword = await bcrypt.hash(newPassword, rounds);
+    await UserModel.updatePassword(userId, hashedPassword);
+
+    // Revoke all other sessions for security
+    await RefreshTokenModel.revokeAllForUser(userId);
+
+    res.json({ message: 'Password changed successfully' });
+  } catch (err) {
+    logger.error({ err: err }, 'Change password error:');
+    res.status(500).json({ message: 'Server error' });
+  }
+};
+
+// @desc Change email (requires password verification, resets email verification)
+export const changeEmail = async (req: Request, res: Response) => {
+  const userId = req.user?.id;
+  if (!userId) return res.status(401).json({ message: 'Unauthorized' });
+
+  const { newEmail, password } = req.body;
+  const { error } = validateChangeEmail({ newEmail, password });
+  if (error) return res.status(400).json({ message: error.details[0].message });
+
+  try {
+    const user = await UserModel.findById(userId);
+    if (!user) return res.status(404).json({ message: 'User not found' });
+
+    const isMatch = await bcrypt.compare(password, user.password_hash);
+    if (!isMatch) return res.status(400).json({ message: 'Password is incorrect' });
+
+    // Check if email is already taken
+    const existing = await UserModel.findByEmail(newEmail);
+    if (existing && existing.id !== userId) {
+      return res.status(409).json({ message: 'This email is already in use' });
+    }
+
+    const updated = await UserModel.updateEmail(userId, newEmail);
+    if (!updated) return res.status(404).json({ message: 'User not found' });
+
+    // Send verification OTP to new email
+    const code = await issueOtp(newEmail, 'email_verification');
+    sendOtpEmailAsync(newEmail, 'email_verification', code, OTP_TTL_MINUTES);
+
+    res.json({
+      user: getPublicUser(updated),
+      message: 'Email changed. A verification code has been sent to your new email.',
+    });
+  } catch (err) {
+    logger.error({ err: err }, 'Change email error:');
+    res.status(500).json({ message: 'Server error' });
+  }
+};
+
+// @desc Delete the user's account and all associated data
+export const deleteAccount = async (req: Request, res: Response) => {
+  const userId = req.user?.id;
+  if (!userId) return res.status(401).json({ message: 'Unauthorized' });
+
+  const { password } = req.body;
+  if (!password) return res.status(400).json({ message: 'Password is required to delete account' });
+
+  try {
+    const user = await UserModel.findById(userId);
+    if (!user) return res.status(404).json({ message: 'User not found' });
+
+    const isMatch = await bcrypt.compare(password, user.password_hash);
+    if (!isMatch) return res.status(400).json({ message: 'Password is incorrect' });
+
+    // Revoke all sessions
+    await RefreshTokenModel.revokeAllForUser(userId);
+
+    // Delete the account (cascading deletes handle files/folders)
+    await UserModel.deleteAccount(userId);
+
+    clearAuthCookies(res);
+    res.json({ message: 'Account deleted permanently' });
+  } catch (err) {
+    logger.error({ err: err }, 'Delete account error:');
     res.status(500).json({ message: 'Server error' });
   }
 };

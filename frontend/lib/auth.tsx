@@ -21,6 +21,10 @@ interface AuthState {
   resetPassword: (data: { email: string; otp: string; password: string; confirmPassword: string }) => Promise<void>;
   login: (email: string, password: string) => Promise<void>;
   logout: () => Promise<void>;
+  updateProfile: (name: string) => Promise<void>;
+  changePassword: (currentPassword: string, newPassword: string, confirmPassword: string) => Promise<void>;
+  changeEmail: (newEmail: string, password: string) => Promise<void>;
+  deleteAccount: (password: string) => Promise<void>;
 }
 
 const AuthContext = createContext<AuthState | undefined>(undefined);
@@ -74,9 +78,32 @@ export function AuthProvider({ children }: { children: ReactNode }) {
     setUser(null);
   };
 
+  const updateProfile = async (name: string) => {
+    const data = await api.put<{ user: User }>('/api/auth/profile', { name });
+    setUser(data.user);
+  };
+
+  const changePassword = async (currentPassword: string, newPassword: string, confirmPassword: string) => {
+    await api.put('/api/auth/password', { currentPassword, newPassword, confirmPassword });
+  };
+
+  const changeEmail = async (newEmail: string, password: string) => {
+    const data = await api.put<{ user: User }>('/api/auth/email', { newEmail, password });
+    setUser(data.user);
+  };
+
+  const deleteAccount = async (password: string) => {
+    await api.put('/api/auth/delete-account', { password });
+    setUser(null);
+  };
+
   return (
     <AuthContext.Provider
-      value={{ user, loading, register, verifyEmail, resendOtp, forgotPassword, resetPassword, login, logout }}
+      value={{
+        user, loading, register, verifyEmail, resendOtp, forgotPassword,
+        resetPassword, login, logout, updateProfile, changePassword,
+        changeEmail, deleteAccount,
+      }}
     >
       {children}
     </AuthContext.Provider>

@@ -23,6 +23,23 @@ export const metadata = {
   },
   description:
     'Encrypted file storage with expiring share links, magic-byte validation, and rotating HttpOnly-cookie sessions. Security you can verify.',
+  openGraph: {
+    title: 'Vault · Secure File Storage',
+    description:
+      'Encrypted file storage with expiring share links, magic-byte validation, and rotating HttpOnly-cookie sessions.',
+    type: 'website',
+    siteName: 'Vault',
+  },
+  twitter: {
+    card: 'summary_large_image',
+    title: 'Vault · Secure File Storage',
+    description:
+      'Encrypted file storage with expiring share links, magic-byte validation, and rotating HttpOnly-cookie sessions.',
+  },
+  robots: {
+    index: true,
+    follow: true,
+  },
 };
 
 export const viewport = {

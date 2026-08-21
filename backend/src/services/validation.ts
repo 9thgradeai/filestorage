@@ -117,3 +117,27 @@ export const validateStarFile = (data: { starred?: unknown }) =>
   Joi.object({
     starred: Joi.boolean().required(),
   }).validate(data, { abortEarly: false });
+
+export const validateUpdateProfile = (data: { name?: unknown }) =>
+  Joi.object({
+    name: nameSchema,
+  }).validate(data, { abortEarly: false });
+
+export const validateChangePassword = (data: {
+  currentPassword?: unknown;
+  newPassword?: unknown;
+  confirmPassword?: unknown;
+}) =>
+  Joi.object({
+    currentPassword: Joi.string().required(),
+    newPassword: passwordSchema,
+    confirmPassword: Joi.string().required().valid(Joi.ref('newPassword')),
+  })
+    .with('newPassword', 'confirmPassword')
+    .validate(data, { abortEarly: false });
+
+export const validateChangeEmail = (data: { newEmail?: unknown; password?: unknown }) =>
+  Joi.object({
+    newEmail: emailSchema,
+    password: Joi.string().required(),
+  }).validate(data, { abortEarly: false });

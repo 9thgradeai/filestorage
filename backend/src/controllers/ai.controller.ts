@@ -1,16 +1,40 @@
+import Groq from 'groq-sdk';
 import { Request, Response } from 'express';
 import { pool } from '../config/database';
 import { logger } from '../config/logger';
 import { FileModel } from '../models/file.model';
 import { FolderModel } from '../models/folder.model';
 
-// ─── Types ──────────────────────────────────────────────────────────────
+type ChatCompletionTool = Groq.Chat.ChatCompletionTool;
+type ChatCompletionMessageParam = Groq.Chat.ChatCompletionMessageParam;
+type ChatCompletionToolMessageParam = Groq.Chat.ChatCompletionToolMessageParam;
 
-interface ChatMessage {
-  role: 'user' | 'assistant';
-  content: string;
-  timestamp: string;
+// ─── Groq Client ──────────────────────────────────────────────────────────
+
+const groq = new Groq({ apiKey: process.env.GROQ_API_KEY || '' });
+const MODEL = process.env.AI_MODEL || 'llama-3.3-70b-versatile';
+
+// ─── Conversation History (in-memory per user, capped at 20 messages) ────
+
+const MAX_HISTORY = 20;
+const userHistories = new Map<number, { role: 'user' | 'assistant' | 'system'; content: string }[]>();
+
+function getHistory(userId: number) {
+  if (!userHistories.has(userId)) userHistories.set(userId, []);
+  return userHistories.get(userId)!;
 }
+
+function appendMessage(userId: number, role: 'user' | 'assistant', content: string) {
+  const history = getHistory(userId);
+  history.push({ role, content });
+  while (history.length > MAX_HISTORY) history.shift();
+}
+
+function clearHistory(userId: number) {
+  userHistories.delete(userId);
+}
+
+// ─── Types ────────────────────────────────────────────────────────────────
 
 interface ActionResult {
   type: 'files' | 'folders' | 'stats' | 'text' | 'error' | 'actions';
@@ -18,78 +42,7 @@ interface ActionResult {
   message: string;
 }
 
-interface ParsedIntent {
-  intent: string;
-  entities: Record<string, any>;
-  confidence: number;
-}
-
-// ─── Intent Recognition ─────────────────────────────────────────────────
-
-const INTENT_PATTERNS: { pattern: RegExp; intent: string; entities?: (match: RegExpMatchArray) => Record<string, any> }[] = [
-  // File operations
-  { pattern: /^(?:search|find|look\s+for|where\s+(?:is|are)|locate|show\s+me)\s+(.+)/i, intent: 'search_files' },
-  { pattern: /^(?:delete|remove|trash|bin)\s+(?:file\s+)?["']?(.+?)["']?\s*$/i, intent: 'trash_file' },
-  { pattern: /^(?:restore|recover|undelete|untrash)\s+(?:file\s+)?["']?(.+?)["']?\s*$/i, intent: 'restore_file' },
-  { pattern: /^(?:star|pin|favorite|mark)\s+(?:file\s+)?["']?(.+?)["']?\s*$/i, intent: 'star_file' },
-  { pattern: /^(?:unstar|unpin|unfavorite|unmark)\s+(?:file\s+)?["']?(.+?)["']?\s*$/i, intent: 'unstar_file' },
-  { pattern: /^(?:rename)\s+(?:file\s+)?["']?(.+?)["']?\s+(?:to|as)\s+["']?(.+?)["']?\s*$/i, intent: 'rename_file' },
-  { pattern: /^(?:move)\s+(?:file\s+)?["']?(.+?)["']?\s+(?:to|into)\s+["']?(.+?)["']?\s*$/i, intent: 'move_file' },
-  { pattern: /^(?:download|get)\s+(?:file\s+)?["']?(.+?)["']?\s*$/i, intent: 'download_file' },
-
-  // Folder operations
-  { pattern: /^(?:create|new|make)\s+(?:a\s+)?folder\s+(?:called\s+|named\s+)?["']?(.+?)["']?\s*$/i, intent: 'create_folder' },
-  { pattern: /^(?:delete|remove|trash)\s+folder\s+["']?(.+?)["']?\s*$/i, intent: 'trash_folder' },
-  { pattern: /^(?:restore|recover)\s+folder\s+["']?(.+?)["']?\s*$/i, intent: 'restore_folder' },
-  { pattern: /^(?:rename)\s+folder\s+["']?(.+?)["']?\s+(?:to|as)\s+["']?(.+?)["']?\s*$/i, intent: 'rename_folder' },
-  { pattern: /^(?:list|show|see)\s+(?:my\s+)?folders?\b/i, intent: 'list_folders' },
-
-  // Views
-  { pattern: /^(?:show|list|what(?:'s| is| are))\s+(?:my\s+)?(?:recent|latest|new(?:est)?)\s*(?:files?|uploads?)?\s*$/i, intent: 'recent_files' },
-  { pattern: /^(?:show|list|what(?:'s| is| are))\s+(?:my\s+)?(?:starred|pinned|favorite|important)\s*(?:files?|items?)?\s*$/i, intent: 'starred_files' },
-  { pattern: /^(?:show|list|what(?:'s| is| are))\s+(?:my\s+)?(?:trash(?:ed)?|deleted|bin)\s*(?:files?|items?)?\s*$/i, intent: 'trashed_files' },
-  { pattern: /^(?:what|how)\s+(?:much|many)\s+(?:space|storage|room)\s+(?:do\s+I|have|left|remain)/i, intent: 'storage_stats' },
-  { pattern: /^(?:storage|quota|space|usage|stats|statistics)\s*$/i, intent: 'storage_stats' },
-
-  // Help
-  { pattern: /^(?:help|what\s+can\s+you\s+do|commands?|options?|capabilities)\s*\??\s*$/i, intent: 'help' },
-  { pattern: /^(?:hi|hello|hey|howdy|greetings|sup|yo)\s*[!.]?\s*$/i, intent: 'greeting' },
-  { pattern: /^(?:thanks?|thank\s+you|thx|ty|cheers|appreciate)\s*[!.]?\s*$/i, intent: 'thanks' },
-
-  // Conversational
-  { pattern: /^(?:who\s+are\s+you|what\s+are\s+you|your\s+name|about)\s*\??\s*$/i, intent: 'about' },
-  { pattern: /^(?:clear|reset|new\s+chat|start\s+over)\s*$/i, intent: 'clear_chat' },
-];
-
-function parseIntent(message: string): ParsedIntent {
-  const trimmed = message.trim();
-
-  for (const { pattern, intent } of INTENT_PATTERNS) {
-    const match = trimmed.match(pattern);
-    if (match) {
-      return { intent, entities: { raw: trimmed, match }, confidence: 0.9 };
-    }
-  }
-
-  // Fuzzy fallback: check for keywords
-  const lower = trimmed.toLowerCase();
-  if (/\b(search|find|where|locate)\b/.test(lower)) return { intent: 'search_files', entities: { raw: trimmed }, confidence: 0.6 };
-  if (/\b(delete|remove|trash|bin)\b/.test(lower)) return { intent: 'trash_file', entities: { raw: trimmed }, confidence: 0.5 };
-  if (/\b(restore|recover|undelete)\b/.test(lower)) return { intent: 'restore_file', entities: { raw: trimmed }, confidence: 0.5 };
-  if (/\b(star|pin|favorite)\b/.test(lower)) return { intent: 'star_file', entities: { raw: trimmed }, confidence: 0.5 };
-  if (/\b(rename)\b/.test(lower)) return { intent: 'rename_file', entities: { raw: trimmed }, confidence: 0.5 };
-  if (/\b(move)\b/.test(lower)) return { intent: 'move_file', entities: { raw: trimmed }, confidence: 0.5 };
-  if (/\b(download|get)\b/.test(lower)) return { intent: 'download_file', entities: { raw: trimmed }, confidence: 0.5 };
-  if (/\b(folder|directories)\b/.test(lower)) return { intent: 'list_folders', entities: { raw: trimmed }, confidence: 0.4 };
-  if (/\b(recent|latest|new)\b/.test(lower)) return { intent: 'recent_files', entities: { raw: trimmed }, confidence: 0.4 };
-  if (/\b(starred|pinned|favorite|important)\b/.test(lower)) return { intent: 'starred_files', entities: { raw: trimmed }, confidence: 0.4 };
-  if (/\b(trash|deleted|bin)\b/.test(lower)) return { intent: 'trashed_files', entities: { raw: trimmed }, confidence: 0.4 };
-  if (/\b(space|storage|quota|usage|stats)\b/.test(lower)) return { intent: 'storage_stats', entities: { raw: trimmed }, confidence: 0.5 };
-
-  return { intent: 'unknown', entities: { raw: trimmed }, confidence: 0 };
-}
-
-// ─── Helpers ─────────────────────────────────────────────────────────────
+// ─── Helpers ──────────────────────────────────────────────────────────────
 
 const STORAGE_QUOTA = parseInt(process.env.DEFAULT_STORAGE_QUOTA || '', 10) || 5 * 1024 * 1024 * 1024;
 
@@ -156,486 +109,542 @@ function buildFolderCards(folders: any[]): any[] {
   }));
 }
 
-// ─── Intent Handlers ────────────────────────────────────────────────────
+// ─── Context Builder ──────────────────────────────────────────────────────
 
-async function handleSearchFiles(userId: number, raw: string): Promise<ActionResult> {
-  // Extract the search query by removing trigger words
-  let query = raw
-    .replace(/^(?:search|find|look\s+for|where\s+(?:is|are)|locate|show\s+me)\s+/i, '')
-    .replace(/^(?:file|files)\s+/i, '')
-    .replace(/["']/g, '')
-    .trim();
+async function buildUserContext(userId: number): Promise<string> {
+  try {
+    const [statsRes, filesRes, foldersRes] = await Promise.all([
+      FileModel.getStats(userId),
+      pool.query(
+        `SELECT original_filename, file_size, mime_type, starred, trashed_at, is_public
+         FROM files WHERE user_id = $1 AND trashed_at IS NULL ORDER BY created_at DESC LIMIT 30`,
+        [userId]
+      ),
+      pool.query(
+        `SELECT name, parent_id, trashed_at
+         FROM folders WHERE user_id = $1 AND trashed_at IS NULL ORDER BY name`,
+        [userId]
+      ),
+    ]);
 
-  if (!query) {
-    return { type: 'text', message: 'What would you like me to search for? Try something like "find photos" or "search documents".' };
+    const stats = statsRes;
+    const files = filesRes.rows;
+    const folders = foldersRes.rows;
+    const quota = STORAGE_QUOTA;
+
+    const lines: string[] = [];
+    lines.push(`Storage: ${formatBytes(parseInt(stats.used, 10) || 0)} used of ${formatBytes(quota)}, ${stats.active} active files, ${stats.starred} starred, ${stats.trashed} trashed.`);
+
+    if (files.length > 0) {
+      lines.push(`Recent files: ${files.map((f: any) => `"${f.original_filename}" (${formatBytes(f.file_size)}, ${f.mime_type || 'unknown'})`).join(', ')}.`);
+    }
+    if (folders.length > 0) {
+      lines.push(`Folders: ${folders.map((f: any) => `"${f.name}"`).join(', ')}.`);
+    }
+
+    return lines.join('\n');
+  } catch {
+    return 'No user context available.';
   }
-
-  const { rows: files } = await pool.query(
-    `SELECT id, original_filename, file_size, mime_type, starred, trashed_at, is_public, created_at
-     FROM files WHERE user_id = $1 AND LOWER(original_filename) LIKE $2
-     ORDER BY created_at DESC LIMIT 20`,
-    [userId, `%${query.toLowerCase()}%`]
-  );
-
-  if (files.length === 0) {
-    return { type: 'files', data: [], message: `No files found matching "${query}".` };
-  }
-
-  return {
-    type: 'files',
-    data: buildFileCards(files),
-    message: `Found ${files.length} file${files.length !== 1 ? 's' : ""} matching "${query}":`,
-  };
 }
 
-async function handleTrashFile(userId: number, raw: string): Promise<ActionResult> {
-  const name = raw
-    .replace(/^(?:delete|remove|trash|bin)\s+(?:file\s+)?/i, '')
-    .replace(/["']/g, '')
-    .trim();
-
-  if (!name) {
-    return { type: 'text', message: 'Which file should I trash? Please provide the filename.' };
-  }
-
-  const { rows: files } = await pool.query(
-    `SELECT id, original_filename FROM files WHERE user_id = $1 AND LOWER(original_filename) LIKE $2 AND trashed_at IS NULL LIMIT 5`,
-    [userId, `%${name.toLowerCase()}%`]
-  );
-
-  if (files.length === 0) {
-    return { type: 'text', message: `No active file found matching "${name}".` };
-  }
-  if (files.length > 1) {
-    return {
-      type: 'files',
-      data: buildFileCards(files),
-      message: `Found ${files.length} files matching "${name}". Which one should I trash?`,
-    };
-  }
-
-  await FileModel.trashFile(files[0].id, userId);
-  return { type: 'text', message: `Moved "${files[0].original_filename}" to trash.` };
-}
-
-async function handleRestoreFile(userId: number, raw: string): Promise<ActionResult> {
-  const name = raw
-    .replace(/^(?:restore|recover|undelete|untrash)\s+(?:file\s+)?/i, '')
-    .replace(/["']/g, '')
-    .trim();
-
-  if (!name) {
-    return { type: 'text', message: 'Which file should I restore? Check your trash first.' };
-  }
-
-  const { rows: files } = await pool.query(
-    `SELECT id, original_filename FROM files WHERE user_id = $1 AND LOWER(original_filename) LIKE $2 AND trashed_at IS NOT NULL LIMIT 5`,
-    [userId, `%${name.toLowerCase()}%`]
-  );
-
-  if (files.length === 0) {
-    return { type: 'text', message: `No trashed file found matching "${name}".` };
-  }
-  if (files.length > 1) {
-    return {
-      type: 'files',
-      data: buildFileCards(files),
-      message: `Found ${files.length} trashed files matching "${name}". Which one should I restore?`,
-    };
-  }
-
-  await FileModel.restoreFile(files[0].id, userId);
-  return { type: 'text', message: `Restored "${files[0].original_filename}" from trash.` };
-}
-
-async function handleStarFile(userId: number, raw: string, star: boolean): Promise<ActionResult> {
-  const action = star ? 'star' : 'unstar';
-  const name = raw
-    .replace(new RegExp(`^(?:${action}(?:r|red)?)\\s+(?:file\\s+)?`, 'i'), '')
-    .replace(/["']/g, '')
-    .trim();
-
-  if (!name) {
-    return { type: 'text', message: `Which file should I ${action}?` };
-  }
-
-  const { rows: files } = await pool.query(
-    `SELECT id, original_filename, starred FROM files WHERE user_id = $1 AND LOWER(original_filename) LIKE $2 AND trashed_at IS NULL LIMIT 5`,
-    [userId, `%${name.toLowerCase()}%`]
-  );
-
-  if (files.length === 0) {
-    return { type: 'text', message: `No active file found matching "${name}".` };
-  }
-  if (files.length > 1) {
-    return {
-      type: 'files',
-      data: buildFileCards(files),
-      message: `Found ${files.length} files matching "${name}". Which one should I ${action}?`,
-    };
-  }
-
-  await FileModel.setStarred(files[0].id, userId, star);
-  return { type: 'text', message: `${star ? 'Starred' : 'Unstarred'} "${files[0].original_filename}".` };
-}
-
-async function handleRenameFile(userId: number, raw: string): Promise<ActionResult> {
-  const match = raw.match(/^(?:rename)\s+(?:file\s+)?["']?(.+?)["']?\s+(?:to|as)\s+["']?(.+?)["']?\s*$/i);
-  if (!match) {
-    return { type: 'text', message: 'Usage: rename file "old name" to "new name"' };
-  }
-
-  const [, oldName, newName] = match;
-  const cleanOld = oldName.replace(/["']/g, '').trim();
-  const cleanNew = newName.replace(/["']/g, '').trim();
-
-  if (!cleanOld || !cleanNew) {
-    return { type: 'text', message: 'Please provide both the current and new filename.' };
-  }
-
-  const { rows: files } = await pool.query(
-    `SELECT id, original_filename FROM files WHERE user_id = $1 AND LOWER(original_filename) LIKE $2 AND trashed_at IS NULL LIMIT 1`,
-    [userId, `%${cleanOld.toLowerCase()}%`]
-  );
-
-  if (files.length === 0) {
-    return { type: 'text', message: `No file found matching "${cleanOld}".` };
-  }
-
-  await FileModel.updateFile(files[0].id, userId, { original_filename: cleanNew });
-  return { type: 'text', message: `Renamed "${files[0].original_filename}" to "${cleanNew}".` };
-}
-
-async function handleMoveFile(userId: number, raw: string): Promise<ActionResult> {
-  const match = raw.match(/^(?:move)\s+(?:file\s+)?["']?(.+?)["']?\s+(?:to|into)\s+["']?(.+?)["']?\s*$/i);
-  if (!match) {
-    return { type: 'text', message: 'Usage: move file "filename" to "folder name"' };
-  }
-
-  const [, fileName, folderName] = match;
-  const cleanFile = fileName.replace(/["']/g, '').trim();
-  const cleanFolder = folderName.replace(/["']/g, '').trim();
-
-  if (!cleanFile || !cleanFolder) {
-    return { type: 'text', message: 'Please provide both the filename and destination folder.' };
-  }
-
-  const { rows: files } = await pool.query(
-    `SELECT id, original_filename FROM files WHERE user_id = $1 AND LOWER(original_filename) LIKE $2 AND trashed_at IS NULL LIMIT 1`,
-    [userId, `%${cleanFile.toLowerCase()}%`]
-  );
-
-  if (files.length === 0) {
-    return { type: 'text', message: `No file found matching "${cleanFile}".` };
-  }
-
-  const { rows: folders } = await pool.query(
-    `SELECT id, name FROM folders WHERE user_id = $1 AND LOWER(name) LIKE $2 AND trashed_at IS NULL LIMIT 1`,
-    [userId, `%${cleanFolder.toLowerCase()}%`]
-  );
-
-  if (folders.length === 0) {
-    return { type: 'text', message: `No folder found matching "${cleanFolder}".` };
-  }
-
-  await FileModel.updateFile(files[0].id, userId, { parent_id: folders[0].id });
-  return { type: 'text', message: `Moved "${files[0].original_filename}" to folder "${folders[0].name}".` };
-}
-
-async function handleDownloadFile(userId: number, raw: string): Promise<ActionResult> {
-  const name = raw
-    .replace(/^(?:download|get)\s+(?:file\s+)?/i, '')
-    .replace(/["']/g, '')
-    .trim();
-
-  if (!name) {
-    return { type: 'text', message: 'Which file would you like to download?' };
-  }
-
-  const { rows: files } = await pool.query(
-    `SELECT id, original_filename FROM files WHERE user_id = $1 AND LOWER(original_filename) LIKE $2 AND trashed_at IS NULL LIMIT 5`,
-    [userId, `%${name.toLowerCase()}%`]
-  );
-
-  if (files.length === 0) {
-    return { type: 'text', message: `No file found matching "${name}".` };
-  }
-
-  return {
-    type: 'files',
-    data: buildFileCards(files),
-    message: `Found ${files.length} file${files.length !== 1 ? 's' : ""} matching "${name}". Click download on the file you want:`,
-  };
-}
-
-async function handleCreateFolder(userId: number, raw: string): Promise<ActionResult> {
-  let name = raw
-    .replace(/^(?:create|new|make)\s+(?:a\s+)?folder\s+(?:called\s+|named\s+)?/i, '')
-    .replace(/["']/g, '')
-    .trim();
-
-  if (!name) name = 'New Folder';
-
-  const { rows: [folder] } = await pool.query(
-    `INSERT INTO folders (name, parent_id, user_id) VALUES ($1, NULL, $3) RETURNING *`,
-    [name, null, userId]
-  );
-
-  return {
-    type: 'folders',
-    data: buildFolderCards([folder]),
-    message: `Created folder "${folder.name}".`,
-  };
-}
-
-async function handleTrashFolder(userId: number, raw: string): Promise<ActionResult> {
-  const name = raw
-    .replace(/^(?:delete|remove|trash)\s+folder\s+/i, '')
-    .replace(/["']/g, '')
-    .trim();
-
-  if (!name) {
-    return { type: 'text', message: 'Which folder should I trash?' };
-  }
-
-  const { rows: folders } = await pool.query(
-    `SELECT id, name FROM folders WHERE user_id = $1 AND LOWER(name) LIKE $2 AND trashed_at IS NULL LIMIT 5`,
-    [userId, `%${name.toLowerCase()}%`]
-  );
-
-  if (folders.length === 0) {
-    return { type: 'text', message: `No active folder found matching "${name}".` };
-  }
-  if (folders.length > 1) {
-    return {
-      type: 'folders',
-      data: buildFolderCards(folders),
-      message: `Found ${folders.length} folders matching "${name}". Which one should I trash?`,
-    };
-  }
-
-  await FolderModel.trashRecursive(folders[0].id, userId);
-  return { type: 'text', message: `Moved folder "${folders[0].name}" to trash (including all contents).` };
-}
-
-async function handleRestoreFolder(userId: number, raw: string): Promise<ActionResult> {
-  const name = raw
-    .replace(/^(?:restore|recover)\s+folder\s+/i, '')
-    .replace(/["']/g, '')
-    .trim();
-
-  if (!name) {
-    return { type: 'text', message: 'Which folder should I restore?' };
-  }
-
-  const { rows: folders } = await pool.query(
-    `SELECT id, name FROM folders WHERE user_id = $1 AND LOWER(name) LIKE $2 AND trashed_at IS NOT NULL LIMIT 5`,
-    [userId, `%${name.toLowerCase()}%`]
-  );
-
-  if (folders.length === 0) {
-    return { type: 'text', message: `No trashed folder found matching "${name}".` };
-  }
-
-  await FolderModel.restoreRecursive(folders[0].id, userId);
-  return { type: 'text', message: `Restored folder "${folders[0].name}" from trash.` };
-}
-
-async function handleRenameFolder(userId: number, raw: string): Promise<ActionResult> {
-  const match = raw.match(/^(?:rename)\s+folder\s+["']?(.+?)["']?\s+(?:to|as)\s+["']?(.+?)["']?\s*$/i);
-  if (!match) {
-    return { type: 'text', message: 'Usage: rename folder "old name" to "new name"' };
-  }
-
-  const [, oldName, newName] = match;
-  const cleanOld = oldName.replace(/["']/g, '').trim();
-  const cleanNew = newName.replace(/["']/g, '').trim();
-
-  const { rows: folders } = await pool.query(
-    `SELECT id, name FROM folders WHERE user_id = $1 AND LOWER(name) LIKE $2 AND trashed_at IS NULL LIMIT 1`,
-    [userId, `%${cleanOld.toLowerCase()}%`]
-  );
-
-  if (folders.length === 0) {
-    return { type: 'text', message: `No folder found matching "${cleanOld}".` };
-  }
-
-  await FolderModel.update(folders[0].id, userId, { name: cleanNew });
-  return { type: 'text', message: `Renamed folder "${folders[0].name}" to "${cleanNew}".` };
-}
-
-async function handleListFolders(userId: number): Promise<ActionResult> {
-  const folders = await FolderModel.listForUser(userId);
-  const active = folders.filter((f) => !f.trashed_at);
-
-  if (active.length === 0) {
-    return { type: 'text', message: "You don't have any folders yet. Create one with 'create folder my-folder'." };
-  }
-
-  return {
-    type: 'folders',
-    data: buildFolderCards(active),
-    message: `You have ${active.length} folder${active.length !== 1 ? 's' : ''}:`,
-  };
-}
-
-async function handleRecentFiles(userId: number): Promise<ActionResult> {
-  const files = await FileModel.findRecentFiles(userId, 15);
-
-  if (files.length === 0) {
-    return { type: 'text', message: "You haven't uploaded any files yet." };
-  }
-
-  return {
-    type: 'files',
-    data: buildFileCards(files),
-    message: `Here are your ${files.length} most recent files:`,
-  };
-}
-
-async function handleStarredFiles(userId: number): Promise<ActionResult> {
-  const { rows: files } = await pool.query(
-    `SELECT id, original_filename, file_size, mime_type, starred, trashed_at, is_public, created_at
-     FROM files WHERE user_id = $1 AND starred = TRUE AND trashed_at IS NULL
-     ORDER BY created_at DESC LIMIT 20`,
-    [userId]
-  );
-
-  if (files.length === 0) {
-    return { type: 'text', message: "You don't have any starred files. Star files for quick access!" };
-  }
-
-  return {
-    type: 'files',
-    data: buildFileCards(files),
-    message: `Here are your ${files.length} starred file${files.length !== 1 ? 's' : ''}:`,
-  };
-}
-
-async function handleTrashedFiles(userId: number): Promise<ActionResult> {
-  const { rows: files } = await pool.query(
-    `SELECT id, original_filename, file_size, mime_type, starred, trashed_at, is_public, created_at
-     FROM files WHERE user_id = $1 AND trashed_at IS NOT NULL
-     ORDER BY trashed_at DESC LIMIT 20`,
-    [userId]
-  );
-
-  if (files.length === 0) {
-    return { type: 'text', message: 'Your trash is empty.' };
-  }
-
-  return {
-    type: 'files',
-    data: buildFileCards(files),
-    message: `You have ${files.length} file${files.length !== 1 ? 's' : ''} in trash:`,
-  };
-}
-
-async function handleStorageStats(userId: number): Promise<ActionResult> {
-  const stats = await FileModel.getStats(userId);
-  const used = parseInt(stats.used, 10) || 0;
-  const active = stats.active || 0;
-  const starred = stats.starred || 0;
-  const trashed = stats.trashed || 0;
-  const remaining = Math.max(0, STORAGE_QUOTA - used);
-  const pct = STORAGE_QUOTA > 0 ? Math.min(100, (used / STORAGE_QUOTA) * 100) : 0;
-
-  const message = [
-    `**Storage Overview**`,
-    ``,
-    `| Metric | Value |`,
-    `|--------|-------|`,
-    `| Used | ${formatBytes(used)} (${pct.toFixed(1)}%) |`,
-    `| Available | ${formatBytes(remaining)} |`,
-    `| Total Quota | ${formatBytes(STORAGE_QUOTA)} |`,
-    ``,
-    `| Files | Count |`,
-    `|--------|-------|`,
-    `| Active | ${active} |`,
-    `| Starred | ${starred} |`,
-    `| Trashed | ${trashed} |`,
-  ].join('\n');
-
-  return { type: 'stats', data: { used, total: STORAGE_QUOTA, active, starred, trashed, pct }, message };
-}
-
-function handleHelp(): ActionResult {
-  const message = [
-    "I'm your Vault AI assistant. Here's what I can do:",
-    "",
-    "**File Operations**",
-    "- `search <query>` — Find files by name",
-    "- `delete <filename>` — Move a file to trash",
-    "- `restore <filename>` — Restore a trashed file",
-    "- `star <filename>` — Star a file",
-    "- `unstar <filename>` — Unstar a file",
-    '- `rename "old" to "new"` — Rename a file',
-    '- `move "file" to "folder"` — Move a file to a folder',
-    "- `download <filename>` — Download a file",
-    "",
-    "**Folder Operations**",
-    '- `create folder <name>` — Create a new folder',
-    "- `delete folder <name>` — Trash a folder",
-    "- `restore folder <name>` — Restore a trashed folder",
-    '- `rename folder "old" to "new"` — Rename a folder',
-    "- `list folders` — Show all folders",
-    "",
-    "**Views**",
-    "- `recent files` — Show recent uploads",
-    "- `starred files` — Show starred files",
-    "- `trashed files` — Show trash",
-    "- `storage stats` — Show storage usage",
-    "",
-    "**Tips**",
-    "- You can use natural language too! Try \"find my photos\" or \"how much space do I have\"",
-    "- Use quotes around filenames with spaces",
-  ].join('\n');
-
-  return { type: 'text', message };
-}
-
-function handleGreeting(): ActionResult {
-  const greetings = [
-    "Hey! I'm your Vault assistant. I can help you manage your files — search, organize, star, trash, and more. What would you like to do?",
-    "Hello! Need help with your files? I can search, organize, rename, move, and manage them. Just ask!",
-    "Hi there! I'm here to help you manage your Vault. Try asking me to find files, check storage, or organize folders.",
-  ];
-  return { type: 'text', message: greetings[Math.floor(Math.random() * greetings.length)] };
-}
-
-function handleThanks(): ActionResult {
-  const responses = [
-    "You're welcome! Let me know if you need anything else.",
-    "Happy to help! Just ask if you need anything.",
-    "Anytime! I'm here whenever you need me.",
-  ];
-  return { type: 'text', message: responses[Math.floor(Math.random() * responses.length)] };
-}
-
-function handleAbout(): ActionResult {
-  return {
-    type: 'text',
-    message: "I'm Vault AI, your personal file management assistant. I can help you search, organize, and manage all your files and folders. I understand natural language, so just talk to me like you would a friend!",
-  };
-}
-
-function handleUnknown(): ActionResult {
-  return {
-    type: 'text',
-    message: "I'm not sure what you mean. Try asking me to search for files, check storage, create folders, or manage your files. Type **help** to see everything I can do.",
-    data: {
-      suggestions: [
-        'Search for files',
-        'Show recent uploads',
-        'Check storage usage',
-        'List my folders',
-        'Help',
-      ],
+// ─── Groq Function Definitions ────────────────────────────────────────────
+
+const tools: ChatCompletionTool[] = [
+  {
+    type: 'function',
+    function: {
+      name: 'search_files',
+      description: 'Search for files by name. Returns matching files.',
+      parameters: {
+        type: 'object',
+        properties: {
+          query: { type: 'string', description: 'Search query (filename keyword)' },
+        },
+        required: ['query'],
+      },
     },
-  };
+  },
+  {
+    type: 'function',
+    function: {
+      name: 'trash_file',
+      description: 'Move a file to trash.',
+      parameters: {
+        type: 'object',
+        properties: {
+          name: { type: 'string', description: 'Filename or part of it' },
+        },
+        required: ['name'],
+      },
+    },
+  },
+  {
+    type: 'function',
+    function: {
+      name: 'restore_file',
+      description: 'Restore a file from trash.',
+      parameters: {
+        type: 'object',
+        properties: {
+          name: { type: 'string', description: 'Filename or part of it' },
+        },
+        required: ['name'],
+      },
+    },
+  },
+  {
+    type: 'function',
+    function: {
+      name: 'star_file',
+      description: 'Star (pin/favorite) a file.',
+      parameters: {
+        type: 'object',
+        properties: {
+          name: { type: 'string', description: 'Filename or part of it' },
+        },
+        required: ['name'],
+      },
+    },
+  },
+  {
+    type: 'function',
+    function: {
+      name: 'unstar_file',
+      description: 'Unstar a file.',
+      parameters: {
+        type: 'object',
+        properties: {
+          name: { type: 'string', description: 'Filename or part of it' },
+        },
+        required: ['name'],
+      },
+    },
+  },
+  {
+    type: 'function',
+    function: {
+      name: 'rename_file',
+      description: 'Rename a file.',
+      parameters: {
+        type: 'object',
+        properties: {
+          old_name: { type: 'string', description: 'Current filename' },
+          new_name: { type: 'string', description: 'New filename' },
+        },
+        required: ['old_name', 'new_name'],
+      },
+    },
+  },
+  {
+    type: 'function',
+    function: {
+      name: 'move_file',
+      description: 'Move a file to a folder.',
+      parameters: {
+        type: 'object',
+        properties: {
+          file_name: { type: 'string', description: 'Filename' },
+          folder_name: { type: 'string', description: 'Destination folder name' },
+        },
+        required: ['file_name', 'folder_name'],
+      },
+    },
+  },
+  {
+    type: 'function',
+    function: {
+      name: 'create_folder',
+      description: 'Create a new folder.',
+      parameters: {
+        type: 'object',
+        properties: {
+          name: { type: 'string', description: 'Folder name' },
+        },
+        required: ['name'],
+      },
+    },
+  },
+  {
+    type: 'function',
+    function: {
+      name: 'trash_folder',
+      description: 'Move a folder to trash.',
+      parameters: {
+        type: 'object',
+        properties: {
+          name: { type: 'string', description: 'Folder name' },
+        },
+        required: ['name'],
+      },
+    },
+  },
+  {
+    type: 'function',
+    function: {
+      name: 'restore_folder',
+      description: 'Restore a folder from trash.',
+      parameters: {
+        type: 'object',
+        properties: {
+          name: { type: 'string', description: 'Folder name' },
+        },
+        required: ['name'],
+      },
+    },
+  },
+  {
+    type: 'function',
+    function: {
+      name: 'rename_folder',
+      description: 'Rename a folder.',
+      parameters: {
+        type: 'object',
+        properties: {
+          old_name: { type: 'string', description: 'Current folder name' },
+          new_name: { type: 'string', description: 'New folder name' },
+        },
+        required: ['old_name', 'new_name'],
+      },
+    },
+  },
+  {
+    type: 'function',
+    function: {
+      name: 'list_folders',
+      description: 'List all folders.',
+      parameters: { type: 'object', properties: {} },
+    },
+  },
+  {
+    type: 'function',
+    function: {
+      name: 'recent_files',
+      description: 'Show the most recently uploaded files.',
+      parameters: { type: 'object', properties: {} },
+    },
+  },
+  {
+    type: 'function',
+    function: {
+      name: 'starred_files',
+      description: 'Show all starred files.',
+      parameters: { type: 'object', properties: {} },
+    },
+  },
+  {
+    type: 'function',
+    function: {
+      name: 'trashed_files',
+      description: 'Show all trashed files.',
+      parameters: { type: 'object', properties: {} },
+    },
+  },
+  {
+    type: 'function',
+    function: {
+      name: 'storage_stats',
+      description: 'Show storage usage statistics.',
+      parameters: { type: 'object', properties: {} },
+    },
+  },
+  {
+    type: 'function',
+    function: {
+      name: 'clear_chat',
+      description: 'Clear the conversation history and start fresh.',
+      parameters: { type: 'object', properties: {} },
+    },
+  },
+];
+
+// ─── Function Execution ───────────────────────────────────────────────────
+
+async function executeFunction(userId: number, name: string, args: Record<string, string>): Promise<ActionResult> {
+  switch (name) {
+    case 'search_files': {
+      const { rows: files } = await pool.query(
+        `SELECT id, original_filename, file_size, mime_type, starred, trashed_at, is_public, created_at
+         FROM files WHERE user_id = $1 AND LOWER(original_filename) LIKE $2
+         ORDER BY created_at DESC LIMIT 20`,
+        [userId, `%${args.query.toLowerCase()}%`]
+      );
+      if (files.length === 0) return { type: 'files', data: [], message: `No files found matching "${args.query}".` };
+      return { type: 'files', data: buildFileCards(files), message: `Found ${files.length} file${files.length !== 1 ? 's' : ''} matching "${args.query}":` };
+    }
+    case 'trash_file': {
+      const { rows: files } = await pool.query(
+        `SELECT id, original_filename FROM files WHERE user_id = $1 AND LOWER(original_filename) LIKE $2 AND trashed_at IS NULL LIMIT 5`,
+        [userId, `%${args.name.toLowerCase()}%`]
+      );
+      if (files.length === 0) return { type: 'text', message: `No active file found matching "${args.name}".` };
+      if (files.length > 1) return { type: 'files', data: buildFileCards(files), message: `Found ${files.length} files matching "${args.name}". Which one should I trash?` };
+      await FileModel.trashFile(files[0].id, userId);
+      return { type: 'text', message: `Moved "${files[0].original_filename}" to trash.` };
+    }
+    case 'restore_file': {
+      const { rows: files } = await pool.query(
+        `SELECT id, original_filename FROM files WHERE user_id = $1 AND LOWER(original_filename) LIKE $2 AND trashed_at IS NOT NULL LIMIT 5`,
+        [userId, `%${args.name.toLowerCase()}%`]
+      );
+      if (files.length === 0) return { type: 'text', message: `No trashed file found matching "${args.name}".` };
+      if (files.length > 1) return { type: 'files', data: buildFileCards(files), message: `Found ${files.length} trashed files matching "${args.name}". Which one should I restore?` };
+      await FileModel.restoreFile(files[0].id, userId);
+      return { type: 'text', message: `Restored "${files[0].original_filename}" from trash.` };
+    }
+    case 'star_file': {
+      const { rows: files } = await pool.query(
+        `SELECT id, original_filename, starred FROM files WHERE user_id = $1 AND LOWER(original_filename) LIKE $2 AND trashed_at IS NULL LIMIT 5`,
+        [userId, `%${args.name.toLowerCase()}%`]
+      );
+      if (files.length === 0) return { type: 'text', message: `No active file found matching "${args.name}".` };
+      if (files.length > 1) return { type: 'files', data: buildFileCards(files), message: `Found ${files.length} files matching "${args.name}". Which one should I star?` };
+      await FileModel.setStarred(files[0].id, userId, true);
+      return { type: 'text', message: `Starred "${files[0].original_filename}".` };
+    }
+    case 'unstar_file': {
+      const { rows: files } = await pool.query(
+        `SELECT id, original_filename, starred FROM files WHERE user_id = $1 AND LOWER(original_filename) LIKE $2 AND trashed_at IS NULL LIMIT 5`,
+        [userId, `%${args.name.toLowerCase()}%`]
+      );
+      if (files.length === 0) return { type: 'text', message: `No active file found matching "${args.name}".` };
+      if (files.length > 1) return { type: 'files', data: buildFileCards(files), message: `Found ${files.length} files matching "${args.name}". Which one should I unstar?` };
+      await FileModel.setStarred(files[0].id, userId, false);
+      return { type: 'text', message: `Unstarred "${files[0].original_filename}".` };
+    }
+    case 'rename_file': {
+      const { rows: files } = await pool.query(
+        `SELECT id, original_filename FROM files WHERE user_id = $1 AND LOWER(original_filename) LIKE $2 AND trashed_at IS NULL LIMIT 1`,
+        [userId, `%${args.old_name.toLowerCase()}%`]
+      );
+      if (files.length === 0) return { type: 'text', message: `No file found matching "${args.old_name}".` };
+      await FileModel.updateFile(files[0].id, userId, { original_filename: args.new_name });
+      return { type: 'text', message: `Renamed "${files[0].original_filename}" to "${args.new_name}".` };
+    }
+    case 'move_file': {
+      const { rows: files } = await pool.query(
+        `SELECT id, original_filename FROM files WHERE user_id = $1 AND LOWER(original_filename) LIKE $2 AND trashed_at IS NULL LIMIT 1`,
+        [userId, `%${args.file_name.toLowerCase()}%`]
+      );
+      if (files.length === 0) return { type: 'text', message: `No file found matching "${args.file_name}".` };
+      const { rows: folders } = await pool.query(
+        `SELECT id, name FROM folders WHERE user_id = $1 AND LOWER(name) LIKE $2 AND trashed_at IS NULL LIMIT 1`,
+        [userId, `%${args.folder_name.toLowerCase()}%`]
+      );
+      if (folders.length === 0) return { type: 'text', message: `No folder found matching "${args.folder_name}".` };
+      await FileModel.updateFile(files[0].id, userId, { parent_id: folders[0].id });
+      return { type: 'text', message: `Moved "${files[0].original_filename}" to folder "${folders[0].name}".` };
+    }
+    case 'create_folder': {
+      const name = args.name || 'New Folder';
+      const { rows: [folder] } = await pool.query(
+        `INSERT INTO folders (name, parent_id, user_id) VALUES ($1, NULL, $3) RETURNING *`,
+        [name, null, userId]
+      );
+      return { type: 'folders', data: buildFolderCards([folder]), message: `Created folder "${folder.name}".` };
+    }
+    case 'trash_folder': {
+      const { rows: folders } = await pool.query(
+        `SELECT id, name FROM folders WHERE user_id = $1 AND LOWER(name) LIKE $2 AND trashed_at IS NULL LIMIT 5`,
+        [userId, `%${args.name.toLowerCase()}%`]
+      );
+      if (folders.length === 0) return { type: 'text', message: `No active folder found matching "${args.name}".` };
+      if (folders.length > 1) return { type: 'folders', data: buildFolderCards(folders), message: `Found ${folders.length} folders matching "${args.name}". Which one should I trash?` };
+      await FolderModel.trashRecursive(folders[0].id, userId);
+      return { type: 'text', message: `Moved folder "${folders[0].name}" to trash (including all contents).` };
+    }
+    case 'restore_folder': {
+      const { rows: folders } = await pool.query(
+        `SELECT id, name FROM folders WHERE user_id = $1 AND LOWER(name) LIKE $2 AND trashed_at IS NOT NULL LIMIT 5`,
+        [userId, `%${args.name.toLowerCase()}%`]
+      );
+      if (folders.length === 0) return { type: 'text', message: `No trashed folder found matching "${args.name}".` };
+      await FolderModel.restoreRecursive(folders[0].id, userId);
+      return { type: 'text', message: `Restored folder "${folders[0].name}" from trash.` };
+    }
+    case 'rename_folder': {
+      const { rows: folders } = await pool.query(
+        `SELECT id, name FROM folders WHERE user_id = $1 AND LOWER(name) LIKE $2 AND trashed_at IS NULL LIMIT 1`,
+        [userId, `%${args.old_name.toLowerCase()}%`]
+      );
+      if (folders.length === 0) return { type: 'text', message: `No folder found matching "${args.old_name}".` };
+      await FolderModel.update(folders[0].id, userId, { name: args.new_name });
+      return { type: 'text', message: `Renamed folder "${folders[0].name}" to "${args.new_name}".` };
+    }
+    case 'list_folders': {
+      const folders = await FolderModel.listForUser(userId);
+      const active = folders.filter((f) => !f.trashed_at);
+      if (active.length === 0) return { type: 'text', message: "You don't have any folders yet." };
+      return { type: 'folders', data: buildFolderCards(active), message: `You have ${active.length} folder${active.length !== 1 ? 's' : ''}:` };
+    }
+    case 'recent_files': {
+      const files = await FileModel.findRecentFiles(userId, 15);
+      if (files.length === 0) return { type: 'text', message: "You haven't uploaded any files yet." };
+      return { type: 'files', data: buildFileCards(files), message: `Here are your ${files.length} most recent files:` };
+    }
+    case 'starred_files': {
+      const { rows: files } = await pool.query(
+        `SELECT id, original_filename, file_size, mime_type, starred, trashed_at, is_public, created_at
+         FROM files WHERE user_id = $1 AND starred = TRUE AND trashed_at IS NULL
+         ORDER BY created_at DESC LIMIT 20`,
+        [userId]
+      );
+      if (files.length === 0) return { type: 'text', message: "You don't have any starred files." };
+      return { type: 'files', data: buildFileCards(files), message: `Here are your ${files.length} starred file${files.length !== 1 ? 's' : ''}:` };
+    }
+    case 'trashed_files': {
+      const { rows: files } = await pool.query(
+        `SELECT id, original_filename, file_size, mime_type, starred, trashed_at, is_public, created_at
+         FROM files WHERE user_id = $1 AND trashed_at IS NOT NULL
+         ORDER BY trashed_at DESC LIMIT 20`,
+        [userId]
+      );
+      if (files.length === 0) return { type: 'text', message: 'Your trash is empty.' };
+      return { type: 'files', data: buildFileCards(files), message: `You have ${files.length} file${files.length !== 1 ? 's' : ''} in trash:` };
+    }
+    case 'storage_stats': {
+      const stats = await FileModel.getStats(userId);
+      const used = parseInt(stats.used, 10) || 0;
+      const remaining = Math.max(0, STORAGE_QUOTA - used);
+      const pct = STORAGE_QUOTA > 0 ? Math.min(100, (used / STORAGE_QUOTA) * 100) : 0;
+      return {
+        type: 'stats',
+        data: { used, total: STORAGE_QUOTA, active: stats.active, starred: stats.starred, trashed: stats.trashed, pct },
+        message: `Storage: ${formatBytes(used)} used (${pct.toFixed(1)}%), ${formatBytes(remaining)} available. ${stats.active} active files, ${stats.starred} starred, ${stats.trashed} trashed.`,
+      };
+    }
+    case 'clear_chat':
+      clearHistory(userId);
+      return { type: 'text', message: '__CLEAR_CHAT__' };
+    default:
+      return { type: 'text', message: `Unknown action: ${name}` };
+  }
 }
 
-// ─── Main Handler ───────────────────────────────────────────────────────
+// ─── Groq Chat Completion ─────────────────────────────────────────────────
+
+const SYSTEM_PROMPT = `You are Vault AI, an intelligent and friendly file management assistant for Vault — a secure file storage app.
+
+You can help users manage their files and folders. You have access to tools that can search, star, trash, restore, rename, move files, manage folders, and check storage.
+
+Guidelines:
+- Be concise and conversational. Use 1-3 sentences unless explaining something complex.
+- When a user asks to do something, use the appropriate tool. Don't just describe what you could do — actually do it.
+- If a user asks about their files/folders/storage, use the relevant tool to get real data.
+- You can handle complex requests like "find all my photos and star them" by chaining tool calls.
+- If the user says something unclear, ask a clarifying question rather than guessing.
+- Never expose internal IDs, database details, or technical implementation details.
+- Be warm and helpful. You're a file management expert.`;
+
+async function chatWithGroq(userId: number, userMessage: string): Promise<ActionResult> {
+  const userContext = await buildUserContext(userId);
+  const history = getHistory(userId);
+
+  const messages: ChatCompletionMessageParam[] = [
+    { role: 'system', content: `${SYSTEM_PROMPT}\n\nUser's vault context:\n${userContext}` },
+    ...history,
+    { role: 'user', content: userMessage },
+  ];
+
+  try {
+    const response = await groq.chat.completions.create({
+      model: MODEL,
+      messages,
+      tools,
+      tool_choice: 'auto',
+      temperature: 0.7,
+      max_tokens: 2048,
+    });
+
+    const assistantMessage = response.choices[0]?.message;
+    if (!assistantMessage) {
+      return { type: 'text', message: "I couldn't generate a response. Please try again." };
+    }
+
+    // If the model wants to call functions, execute them
+    if (assistantMessage.tool_calls && assistantMessage.tool_calls.length > 0) {
+      const toolResults: ChatCompletionToolMessageParam[] = [];
+
+      for (const toolCall of assistantMessage.tool_calls) {
+        const fnName = toolCall.function.name;
+        let fnArgs: Record<string, string> = {};
+        try {
+          fnArgs = JSON.parse(toolCall.function.arguments || '{}');
+        } catch {
+          // malformed args
+        }
+
+        logger.debug({ userId, function: fnName, args: fnArgs }, 'Groq function call');
+        const result = await executeFunction(userId, fnName, fnArgs);
+        toolResults.push({
+          role: 'tool',
+          tool_call_id: toolCall.id,
+          content: JSON.stringify({ result: result.message, type: result.type, data: result.data }),
+        });
+
+        // If this was a clear_chat, return early
+        if (fnName === 'clear_chat') return result;
+      }
+
+      // Send tool results back to Groq for a final response
+      const followUp = await groq.chat.completions.create({
+        model: MODEL,
+        messages: [
+          { role: 'system', content: `${SYSTEM_PROMPT}\n\nUser's vault context:\n${userContext}` },
+          ...history,
+          { role: 'user', content: userMessage },
+          assistantMessage,
+          ...toolResults,
+        ],
+        temperature: 0.7,
+        max_tokens: 2048,
+      });
+
+      const finalContent = followUp.choices[0]?.message?.content || 'Done!';
+
+      // Return the tool results + the LLM's natural language summary
+      // The frontend handles displaying file/folder cards from data
+      const combinedResult = toolResults.map((tr) => {
+        try {
+          const contentStr = typeof tr.content === 'string' ? tr.content : JSON.stringify(tr.content);
+          const parsed = JSON.parse(contentStr);
+          return parsed;
+        } catch {
+          const contentStr = typeof tr.content === 'string' ? tr.content : JSON.stringify(tr.content);
+          return { result: contentStr, type: 'text' };
+        }
+      });
+
+      appendMessage(userId, 'user', userMessage);
+      appendMessage(userId, 'assistant', finalContent);
+
+      // Return the first tool result's data (for file/folder cards) with the LLM's response
+      const primaryResult = combinedResult[0];
+      return {
+        type: (primaryResult?.type || 'text') as ActionResult['type'],
+        data: primaryResult?.data || null,
+        message: finalContent,
+      };
+    }
+
+    // No tool calls — just a conversational response
+    const content = assistantMessage.content || "I'm not sure how to help with that. Try asking me to search for files, check storage, or manage folders.";
+    appendMessage(userId, 'user', userMessage);
+    appendMessage(userId, 'assistant', content);
+
+    return { type: 'text', message: content };
+  } catch (err: any) {
+    logger.error({ err, userId }, 'Groq API error');
+
+    // Fallback to a friendly error
+    if (err?.status === 429) {
+      return { type: 'text', message: "I'm getting a lot of requests right now. Please try again in a moment." };
+    }
+    return { type: 'text', message: "I'm having trouble connecting to my AI backend. Please try again." };
+  }
+}
+
+// ─── Main Handler ─────────────────────────────────────────────────────────
 
 export const chat = async (req: Request, res: Response) => {
   try {
@@ -651,89 +660,24 @@ export const chat = async (req: Request, res: Response) => {
       return;
     }
 
-    const parsed = parseIntent(message.trim());
-    logger.debug({ userId, intent: parsed.intent, confidence: parsed.confidence }, 'AI intent detected');
-
-    let result: ActionResult;
-
-    switch (parsed.intent) {
-      case 'search_files':
-        result = await handleSearchFiles(userId, message);
-        break;
-      case 'trash_file':
-        result = await handleTrashFile(userId, message);
-        break;
-      case 'restore_file':
-        result = await handleRestoreFile(userId, message);
-        break;
-      case 'star_file':
-        result = await handleStarFile(userId, message, true);
-        break;
-      case 'unstar_file':
-        result = await handleStarFile(userId, message, false);
-        break;
-      case 'rename_file':
-        result = await handleRenameFile(userId, message);
-        break;
-      case 'move_file':
-        result = await handleMoveFile(userId, message);
-        break;
-      case 'download_file':
-        result = await handleDownloadFile(userId, message);
-        break;
-      case 'create_folder':
-        result = await handleCreateFolder(userId, message);
-        break;
-      case 'trash_folder':
-        result = await handleTrashFolder(userId, message);
-        break;
-      case 'restore_folder':
-        result = await handleRestoreFolder(userId, message);
-        break;
-      case 'rename_folder':
-        result = await handleRenameFolder(userId, message);
-        break;
-      case 'list_folders':
-        result = await handleListFolders(userId);
-        break;
-      case 'recent_files':
-        result = await handleRecentFiles(userId);
-        break;
-      case 'starred_files':
-        result = await handleStarredFiles(userId);
-        break;
-      case 'trashed_files':
-        result = await handleTrashedFiles(userId);
-        break;
-      case 'storage_stats':
-        result = await handleStorageStats(userId);
-        break;
-      case 'help':
-        result = handleHelp();
-        break;
-      case 'greeting':
-        result = handleGreeting();
-        break;
-      case 'thanks':
-        result = handleThanks();
-        break;
-      case 'about':
-        result = handleAbout();
-        break;
-      case 'clear_chat':
-        result = { type: 'text', message: '__CLEAR_CHAT__' };
-        break;
-      default:
-        result = handleUnknown();
-        break;
+    // If no Groq API key configured, fall back to a basic response
+    if (!process.env.GROQ_API_KEY) {
+      res.json({
+        response: "AI assistant is not configured yet. Please set the GROQ_API_KEY environment variable.",
+        type: 'text',
+        data: null,
+        intent: 'config_missing',
+        confidence: 1,
+      });
+      return;
     }
+
+    const result = await chatWithGroq(userId, message.trim());
 
     res.json({
       response: result.message,
       type: result.type,
       data: result.data || null,
-      intent: parsed.intent,
-      confidence: parsed.confidence,
     });
   } catch (err) {
     logger.error({ err }, 'AI chat error');
