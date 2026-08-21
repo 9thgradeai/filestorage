@@ -3091,6 +3091,10 @@ textarea:focus-visible {
 
 .drive-menu-portal {
   position: fixed;
+  /* Tall menus scroll internally instead of overflowing short viewports */
+  max-height: min(60vh, 420px);
+  overflow-y: auto;
+  overscroll-behavior: contain;
 }
 
 .drive-menu-backdrop {

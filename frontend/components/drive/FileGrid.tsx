@@ -374,22 +374,26 @@ function FileContextMenu({
     const vw = window.innerWidth;
     const vh = window.innerHeight;
     const menuW = 200;
+    // Height estimate for flip decisions; real overflow is handled by
+    // max-height + internal scroll on the portal itself.
     const menuH = inTrash ? 100 : 340;
     const gap = 6;
 
-    let left = anchor.right - menuW;
+    // Deterministic dropdown placement: the panel's top-left corner always
+    // sits just below the trigger button, extending rightward — independent
+    // of surrounding empty space. Only viewport edges alter placement.
+    let left = anchor.left;
     let top = anchor.bottom + gap;
 
-    // If menu would go below viewport, open upward
-    if (top + menuH > vh) {
-      top = anchor.top - menuH - gap;
+    // Flip above only when there is genuinely more room above than below.
+    const below = vh - anchor.bottom;
+    if (top + menuH > vh - gap && anchor.top > below) {
+      top = Math.max(gap, anchor.top - menuH - gap);
     }
-    // If still off-screen, clamp to viewport
-    if (top < gap) top = gap;
 
-    // Horizontal: keep within viewport
-    if (left < gap) left = gap;
-    if (left + menuW > vw - gap) left = vw - menuW - gap;
+    // Keep fully inside the viewport (landscape phones, split view, etc.)
+    left = Math.min(Math.max(left, gap), vw - menuW - gap);
+    top = Math.min(Math.max(top, gap), Math.max(gap, vh - menuH - gap));
 
     setPos({ top, left });
   }, [anchor, inTrash]);
@@ -402,6 +406,14 @@ function FileContextMenu({
 
   useEffect(() => {
     const handleOutsideClick = (e: MouseEvent) => {
+      if (menuRef.current && !menuRef.current.contains(e.target as Node)) {
+        onClose();
+      }
+    };
+    // The menu is position:fixed — any container scroll would detach it from
+    // its trigger. Close instead of floating out of place. Scrolling inside
+    // the menu itself (tall list on short screens) is allowed.
+    const handleScroll = (e: Event) => {
       if (menuRef.current && !menuRef.current.contains(e.target as Node)) {
         onClose();
       }
@@ -437,9 +449,11 @@ function FileContextMenu({
     };
     document.addEventListener('mousedown', handleOutsideClick);
     document.addEventListener('keydown', handleKey);
+    document.addEventListener('scroll', handleScroll, true);
     return () => {
       document.removeEventListener('mousedown', handleOutsideClick);
       document.removeEventListener('keydown', handleKey);
+      document.removeEventListener('scroll', handleScroll, true);
     };
   }, [onClose]);
 
