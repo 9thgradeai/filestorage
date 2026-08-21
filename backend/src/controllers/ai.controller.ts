@@ -12,7 +12,7 @@ type ChatCompletionToolMessageParam = Groq.Chat.ChatCompletionToolMessageParam;
 // ─── Groq Client ──────────────────────────────────────────────────────────
 
 const groq = new Groq({ apiKey: process.env.GROQ_API_KEY || '' });
-const MODEL = process.env.AI_MODEL || 'llama-3.3-70b-versatile';
+const MODEL = process.env.AI_MODEL || 'qwen/qwen3.6-27b';
 
 // ─── Conversation History (in-memory per user, capped at 20 messages) ────
 
