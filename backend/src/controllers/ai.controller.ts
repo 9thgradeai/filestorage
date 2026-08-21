@@ -445,8 +445,8 @@ async function executeFunction(userId: number, name: string, args: Record<string
     case 'create_folder': {
       const name = args.name || 'New Folder';
       const { rows: [folder] } = await pool.query(
-        `INSERT INTO folders (name, parent_id, user_id) VALUES ($1, NULL, $3) RETURNING *`,
-        [name, null, userId]
+        `INSERT INTO folders (name, parent_id, user_id) VALUES ($1, NULL, $2) RETURNING *`,
+        [name, userId]
       );
       return { type: 'folders', data: buildFolderCards([folder]), message: `Created folder "${folder.name}".` };
     }
