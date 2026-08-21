@@ -1,19 +1,24 @@
+'use client';
+
+import { useState, useEffect } from 'react';
+import { Sparkle, X } from '@phosphor-icons/react';
+
 export default function ChatButton() {
+  const [open, setOpen] = useState(false);
+
+  useEffect(() => {
+    const toggle = () => setOpen((o) => !o);
+    window.addEventListener('ai:toggle', toggle);
+    return () => window.removeEventListener('ai:toggle', toggle);
+  }, []);
+
   return (
     <button
-      className="fixed bottom-6 right-6 flex items-center justify-center p-2 rounded-full bg-primary text-primary-foreground shadow-lg hover:scale-110 transition-transform"
-      aria-label="AI Assistant"
+      className="ai-fab"
+      aria-label={open ? 'Close AI assistant' : 'Open AI assistant'}
       onClick={() => window.dispatchEvent(new Event('ai:toggle'))}
     >
-      <svg
-        width={20}
-        height={20}
-        viewBox="0 0 24 24"
-        fill="currentColor"
-        aria-hidden="true"
-      >
-        <path d="M18 6L6 18M6 6l12 12" />
-      </svg>
+      {open ? <X size={20} weight="bold" /> : <Sparkle size={20} weight="fill" />}
     </button>
   );
-};
+}
