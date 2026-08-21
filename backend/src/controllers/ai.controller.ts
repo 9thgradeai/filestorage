@@ -12,7 +12,14 @@ type ChatCompletionToolMessageParam = Groq.Chat.ChatCompletionToolMessageParam;
 // ─── Groq Client ──────────────────────────────────────────────────────────
 
 const groq = new Groq({ apiKey: process.env.GROQ_API_KEY || '' });
-const MODEL = process.env.AI_MODEL || 'qwen/qwen3.6-27b';
+// gpt-oss-120b: fast (~0.5s) tool-calling with reasoning kept out of content.
+// Avoid thinking-mode chat models (e.g. qwen3.6) — they add <think> blocks and 20-50s latency.
+const MODEL = process.env.AI_MODEL || 'openai/gpt-oss-120b';
+
+// Defense-in-depth: some thinking models inline <think> blocks in content.
+function stripThinking(text: string): string {
+  return text.replace(/<think>[\s\S]*?<\/think>/g, '').trim();
+}
 
 // ─── Conversation History (in-memory per user, capped at 20 messages) ────
 
@@ -554,7 +561,8 @@ async function chatWithGroq(userId: number, userMessage: string): Promise<Action
       tool_choice: 'auto',
       temperature: 0.7,
       max_tokens: 2048,
-    });
+      reasoning_effort: 'low',
+    } as any);
 
     const assistantMessage = response.choices[0]?.message;
     if (!assistantMessage) {
@@ -598,9 +606,10 @@ async function chatWithGroq(userId: number, userMessage: string): Promise<Action
         ],
         temperature: 0.7,
         max_tokens: 2048,
-      });
+        reasoning_effort: 'low',
+      } as any);
 
-      const finalContent = followUp.choices[0]?.message?.content || 'Done!';
+      const finalContent = stripThinking(followUp.choices[0]?.message?.content || 'Done!');
 
       // Return the tool results + the LLM's natural language summary
       // The frontend handles displaying file/folder cards from data
@@ -628,7 +637,7 @@ async function chatWithGroq(userId: number, userMessage: string): Promise<Action
     }
 
     // No tool calls — just a conversational response
-    const content = assistantMessage.content || "I'm not sure how to help with that. Try asking me to search for files, check storage, or manage folders.";
+    const content = stripThinking(assistantMessage.content || '') || "I'm not sure how to help with that. Try asking me to search for files, check storage, or manage folders.";
     appendMessage(userId, 'user', userMessage);
     appendMessage(userId, 'assistant', content);
 
