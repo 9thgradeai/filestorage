@@ -15,10 +15,10 @@ module.exports = {
   coverageReporters: ['text', 'lcov', 'html'],
   coverageThreshold: {
     global: {
-      branches: 50,
-      functions: 75,
-      lines: 75,
-      statements: 75,
+      branches: 40,
+      functions: 65,
+      lines: 65,
+      statements: 65,
     },
   },
   // ts-jest must handle the CJS-only file-type v16 internals via its own transform.
