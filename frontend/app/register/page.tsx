@@ -1,6 +1,6 @@
 'use client';
 
-import { useEffect, useState } from 'react';
+import { useEffect, useMemo, useState } from 'react';
 import { useRouter } from 'next/navigation';
 import Link from 'next/link';
 import {
@@ -10,8 +10,18 @@ import {
   ClockCountdown,
   Eye,
   EyeSlash,
+  LockKey,
 } from '@phosphor-icons/react';
 import { useAuth } from '../../lib/auth';
+import { Brand } from '../../components/Brand';
+
+const VAULT_CHECKS = [
+  'PASSWORD HASHED · BCRYPT 12 ROUNDS',
+  'OTP VERIFICATION REQUIRED',
+  'NO SESSION BEFORE VERIFY',
+];
+
+const STRENGTH_LABELS = ['', 'Weak', 'Fair', 'Good', 'Strong'];
 
 export default function RegisterPage() {
   const router = useRouter();
@@ -40,6 +50,17 @@ export default function RegisterPage() {
     const t = setInterval(() => setResendIn((s) => s - 1), 1000);
     return () => clearInterval(t);
   }, [step, resendIn]);
+
+  // Live password strength: length + character classes (mirrors backend policy).
+  const pwScore = useMemo(() => {
+    if (!password) return 0;
+    let s = 0;
+    if (password.length >= 8) s += 1;
+    if (/[a-z]/.test(password) && /[A-Z]/.test(password)) s += 1;
+    if (/\d/.test(password)) s += 1;
+    if (/[^A-Za-z0-9]/.test(password)) s += 1;
+    return s;
+  }, [password]);
 
   const handleRegister = async (e: React.FormEvent) => {
     e.preventDefault();
@@ -88,191 +109,275 @@ export default function RegisterPage() {
   };
 
   return (
-    <div className="auth-wrap">
-      <div className="auth-card">
-        {step === 'form' ? (
-          <>
-            <Link href="/" className="auth-brand" aria-label="Vault home">
-              <ShieldCheck size={40} weight="duotone" color="var(--accent-strong)" aria-hidden="true" />
-            </Link>
-            <h1>Create your account</h1>
-            <p className="auth-sub">Your encrypted vault is seconds away.</p>
+    <div className="auth-shell">
+      {/* Brand immersion panel */}
+      <aside className="auth-brandpanel" aria-hidden="true">
+        <div className="auth-brand-top">
+          <Brand />
+        </div>
 
-            <form className="flex-col mt-6" onSubmit={handleRegister} noValidate>
-              <div className="form-group">
-                <label className="label" htmlFor="name">
-                  Name
-                </label>
-                <input
-                  id="name"
-                  type="text"
-                  value={name}
-                  onChange={(e) => setName(e.target.value)}
-                  className="input"
-                  placeholder="Jane Doe"
-                  autoComplete="name"
-                  minLength={2}
-                  maxLength={100}
-                  required
-                />
-              </div>
-              <div className="form-group">
-                <label className="label" htmlFor="email">
-                  Email
-                </label>
-                <input
-                  id="email"
-                  type="email"
-                  value={email}
-                  onChange={(e) => setEmail(e.target.value)}
-                  className="input"
-                  placeholder="you@company.com"
-                  autoComplete="email"
-                  required
-                />
-              </div>
-              <div className="form-group">
-                <label className="label" htmlFor="password">
-                  Password
-                </label>
-                <div className="input-wrap">
-                  <input
-                    id="password"
-                    type={showPassword ? 'text' : 'password'}
-                    value={password}
-                    onChange={(e) => setPassword(e.target.value)}
-                    className="input"
-                    placeholder="••••••••"
-                    autoComplete="new-password"
-                    minLength={8}
-                    required
-                  />
-                  <button
-                    type="button"
-                    className="input-toggle"
-                    aria-label={showPassword ? 'Hide password' : 'Show password'}
-                    aria-pressed={showPassword}
-                    onClick={() => setShowPassword((v) => !v)}
-                  >
-                    {showPassword ? (
-                      <EyeSlash size={17} weight="bold" aria-hidden="true" />
-                    ) : (
-                      <Eye size={17} weight="bold" aria-hidden="true" />
-                    )}
-                  </button>
-                </div>
-                <p className="helper">
-                  Minimum 8 characters, with an uppercase, a lowercase, a number, and a symbol.
-                </p>
-              </div>
-              <div className="form-group">
-                <label className="label" htmlFor="confirmPassword">
-                  Confirm password
-                </label>
-                <div className="input-wrap">
-                  <input
-                    id="confirmPassword"
-                    type={showConfirm ? 'text' : 'password'}
-                    value={confirmPassword}
-                    onChange={(e) => setConfirmPassword(e.target.value)}
-                    className="input"
-                    placeholder="••••••••"
-                    autoComplete="new-password"
-                    minLength={8}
-                    required
-                  />
-                  <button
-                    type="button"
-                    className="input-toggle"
-                    aria-label={showConfirm ? 'Hide password' : 'Show password'}
-                    aria-pressed={showConfirm}
-                    onClick={() => setShowConfirm((v) => !v)}
-                  >
-                    {showConfirm ? (
-                      <EyeSlash size={17} weight="bold" aria-hidden="true" />
-                    ) : (
-                      <Eye size={17} weight="bold" aria-hidden="true" />
-                    )}
-                  </button>
-                </div>
-              </div>
-              {error && <p className="field-error" role="alert">{error}</p>}
-              <button type="submit" className="btn btn-primary mt-4" disabled={busy}>
-                {busy ? 'Creating account…' : 'Create account'}
-                {!busy && <UserPlus size={16} weight="bold" aria-hidden="true" />}
-              </button>
-            </form>
+        <div className="auth-brand-mid">
+          <span className="auth-kicker">
+            <LockKey size={12} weight="bold" /> Restricted area
+          </span>
+          <h2 className="auth-brand-title">
+            Build your vault in <em>seconds.</em>
+          </h2>
+          <p className="auth-brand-sub">
+            One account, every layer of protection already on. Verify your email
+            and the vault seals itself behind you.
+          </p>
 
-            <p className="auth-note">PASSWORDS HASHED WITH BCRYPT · 12 ROUNDS</p>
+          <div className="vault-term">
+            <div className="vault-term-head">
+              <span className="vault-term-dot" />
+              Account provisioning
+            </div>
+            <ul className="vault-checks">
+              <li className="vault-check"><span>{VAULT_CHECKS[0]}</span><span className="check-tag">[ok]</span></li>
+              <li className="vault-check"><span>{VAULT_CHECKS[1]}</span><span className="check-tag">[ok]</span></li>
+              <li className="vault-check"><span>{VAULT_CHECKS[2]}</span><span className="check-tag">[ok]</span></li>
+              <li className="vault-check"><span>5 GB ENCRYPTED STORAGE</span><span className="check-tag">[ok]</span></li>
+            </ul>
+          </div>
+        </div>
 
-            <p className="auth-foot">
-              Already have an account?{' '}
-              <Link href="/login" className="link">
-                Sign in
+        <div className="auth-brand-stats">
+          <span><i className="stat-tick" /> MAGIC-BYTE VALIDATION</span>
+          <span><i className="stat-tick" /> AES-256 AT REST</span>
+        </div>
+      </aside>
+
+      {/* Form panel */}
+      <main className="auth-formpanel">
+        <div className="auth-formcard">
+          {step === 'form' ? (
+            <>
+              <Link href="/" className="auth-back rise d1" aria-label="Back to Vault home">
+                <ArrowLeft size={14} weight="bold" /> Back to home
               </Link>
-            </p>
-          </>
-        ) : (
-          <>
-            <div className="auth-brand">
-              <ShieldCheck size={40} weight="duotone" color="var(--accent-strong)" aria-hidden="true" />
-            </div>
-            <h1>Check your email</h1>
-            <p className="auth-sub">
-              We sent a 6-digit code to <strong>{email}</strong>. Enter it below to
-              verify your email and activate your account.
-            </p>
 
-            <form className="flex-col mt-6" onSubmit={handleVerify} noValidate>
-              <div className="form-group">
-                <label className="label" htmlFor="otp">
-                  Verification code
-                </label>
-                <input
-                  id="otp"
-                  type="text"
-                  inputMode="numeric"
-                  autoComplete="one-time-code"
-                  value={otp}
-                  onChange={(e) => setOtp(e.target.value.replace(/\D/g, '').slice(0, 6))}
-                  className="input otp-input"
-                  placeholder="••••••"
-                  required
-                  autoFocus
-                />
-              </div>
-              {error && <p className="field-error" role="alert">{error}</p>}
-              <button type="submit" className="btn btn-primary mt-4" disabled={busy || otp.length !== 6}>
-                {busy ? 'Verifying…' : 'Verify & continue'}
-                {!busy && <ShieldCheck size={16} weight="bold" aria-hidden="true" />}
-              </button>
-            </form>
+              <span className="auth-mark rise d1" aria-hidden="true">
+                <ShieldCheck size={22} weight="duotone" />
+              </span>
 
-            <div className="auth-foot" style={{ marginTop: '1.25rem' }}>
-              {resendIn > 0 ? (
-                <span className="muted">
-                  <ClockCountdown size={14} weight="bold" /> Resend available in {resendIn}s
-                </span>
-              ) : (
-                <button type="button" className="btn btn-ghost btn-sm" onClick={handleResend} disabled={busy}>
-                  Resend code
+              <p className="auth-eyebrow rise d1">Create account</p>
+              <h1 className="rise d2">Your encrypted vault awaits.</h1>
+              <p className="auth-sub rise d2">Seconds to create. Sealed from the first file.</p>
+
+              <form className="flex-col mt-6 rise d3" onSubmit={handleRegister} noValidate>
+                <div className="form-group">
+                  <label className="label" htmlFor="name">
+                    Name
+                  </label>
+                  <input
+                    id="name"
+                    type="text"
+                    value={name}
+                    onChange={(e) => setName(e.target.value)}
+                    className="input"
+                    placeholder="Jane Doe"
+                    autoComplete="name"
+                    minLength={2}
+                    maxLength={100}
+                    required
+                  />
+                </div>
+                <div className="form-group">
+                  <label className="label" htmlFor="email">
+                    Email
+                  </label>
+                  <input
+                    id="email"
+                    type="email"
+                    value={email}
+                    onChange={(e) => setEmail(e.target.value)}
+                    className="input"
+                    placeholder="you@company.com"
+                    autoComplete="email"
+                    required
+                  />
+                </div>
+                <div className="form-group">
+                  <label className="label" htmlFor="password">
+                    Password
+                  </label>
+                  <div className="input-wrap">
+                    <input
+                      id="password"
+                      type={showPassword ? 'text' : 'password'}
+                      value={password}
+                      onChange={(e) => setPassword(e.target.value)}
+                      className="input"
+                      placeholder="••••••••"
+                      autoComplete="new-password"
+                      minLength={8}
+                      required
+                    />
+                    <button
+                      type="button"
+                      className="input-toggle"
+                      aria-label={showPassword ? 'Hide password' : 'Show password'}
+                      aria-pressed={showPassword}
+                      onClick={() => setShowPassword((v) => !v)}
+                    >
+                      {showPassword ? (
+                        <EyeSlash size={17} weight="bold" aria-hidden="true" />
+                      ) : (
+                        <Eye size={17} weight="bold" aria-hidden="true" />
+                      )}
+                    </button>
+                  </div>
+                  {password && (
+                    <div className="pw-meter" aria-live="polite">
+                      {[1, 2, 3, 4].map((n) => (
+                        <span
+                          key={n}
+                          className={`pw-seg${pwScore >= n ? ` s${pwScore}` : ''}`}
+                        />
+                      ))}
+                      <span className={`pw-label l${pwScore}`}>
+                        {STRENGTH_LABELS[pwScore]}
+                      </span>
+                    </div>
+                  )}
+                  {!password && (
+                    <p className="helper">
+                      Min 8 characters with an uppercase, lowercase, number, and symbol.
+                    </p>
+                  )}
+                </div>
+                <div className="form-group">
+                  <label className="label" htmlFor="confirmPassword">
+                    Confirm password
+                  </label>
+                  <div className="input-wrap">
+                    <input
+                      id="confirmPassword"
+                      type={showConfirm ? 'text' : 'password'}
+                      value={confirmPassword}
+                      onChange={(e) => setConfirmPassword(e.target.value)}
+                      className="input"
+                      placeholder="••••••••"
+                      autoComplete="new-password"
+                      minLength={8}
+                      required
+                    />
+                    <button
+                      type="button"
+                      className="input-toggle"
+                      aria-label={showConfirm ? 'Hide password' : 'Show password'}
+                      aria-pressed={showConfirm}
+                      onClick={() => setShowConfirm((v) => !v)}
+                    >
+                      {showConfirm ? (
+                        <EyeSlash size={17} weight="bold" aria-hidden="true" />
+                      ) : (
+                        <Eye size={17} weight="bold" aria-hidden="true" />
+                      )}
+                    </button>
+                  </div>
+                </div>
+                {error && <p className="field-error" role="alert">{error}</p>}
+                <button type="submit" className="btn btn-primary auth-submit mt-4" disabled={busy}>
+                  {busy ? (
+                    <>
+                      <span className="btn-spinner" aria-hidden="true" /> Creating account…
+                    </>
+                  ) : (
+                    <>
+                      Create account <UserPlus size={16} weight="bold" aria-hidden="true" />
+                    </>
+                  )}
                 </button>
-              )}
-            </div>
+              </form>
 
-            <p className="auth-foot">
-              <button
-                type="button"
-                className="link"
-                onClick={() => setStep('form')}
-                style={{ background: 'none', border: 'none', cursor: 'pointer', padding: 0 }}
-              >
-                <ArrowLeft size={13} weight="bold" /> Edit email or password
-              </button>
-            </p>
-          </>
-        )}
-      </div>
+              <p className="auth-footnote rise d4">
+                <LockKey size={12} weight="bold" /> Hashed with bcrypt · never stored in plain text
+              </p>
+
+              <p className="auth-foot rise d5">
+                Already have an account?{' '}
+                <Link href="/login" className="link">
+                  Sign in
+                </Link>
+              </p>
+            </>
+          ) : (
+            <>
+              <span className="auth-mark rise d1" aria-hidden="true">
+                <ShieldCheck size={22} weight="duotone" />
+              </span>
+
+              <p className="auth-eyebrow rise d1">Verify email</p>
+              <h1 className="rise d2">Check your inbox.</h1>
+              <p className="auth-sub rise d2">
+                We sent a 6-digit code to <strong>{email}</strong>. Enter it below
+                to activate your account.
+              </p>
+
+              <form className="flex-col mt-6 rise d3" onSubmit={handleVerify} noValidate>
+                <div className="form-group">
+                  <label className="label" htmlFor="otp">
+                    Verification code
+                  </label>
+                  <input
+                    id="otp"
+                    type="text"
+                    inputMode="numeric"
+                    autoComplete="one-time-code"
+                    value={otp}
+                    onChange={(e) => setOtp(e.target.value.replace(/\D/g, '').slice(0, 6))}
+                    className="input otp-input"
+                    placeholder="••••••"
+                    required
+                    autoFocus
+                  />
+                </div>
+                {error && <p className="field-error" role="alert">{error}</p>}
+                <button
+                  type="submit"
+                  className="btn btn-primary auth-submit mt-4"
+                  disabled={busy || otp.length !== 6}
+                >
+                  {busy ? (
+                    <>
+                      <span className="btn-spinner" aria-hidden="true" /> Verifying…
+                    </>
+                  ) : (
+                    <>
+                      Verify &amp; continue <ShieldCheck size={16} weight="bold" aria-hidden="true" />
+                    </>
+                  )}
+                </button>
+              </form>
+
+              <div className="auth-foot rise d4" style={{ marginTop: '1.25rem' }}>
+                {resendIn > 0 ? (
+                  <span className="muted">
+                    <ClockCountdown size={14} weight="bold" /> Resend available in {resendIn}s
+                  </span>
+                ) : (
+                  <button type="button" className="btn btn-ghost btn-sm" onClick={handleResend} disabled={busy}>
+                    Resend code
+                  </button>
+                )}
+              </div>
+
+              <p className="auth-foot rise d5">
+                <button
+                  type="button"
+                  className="link"
+                  onClick={() => setStep('form')}
+                  style={{ background: 'none', border: 'none', cursor: 'pointer', padding: 0 }}
+                >
+                  <ArrowLeft size={13} weight="bold" /> Edit email or password
+                </button>
+              </p>
+            </>
+          )}
+        </div>
+      </main>
     </div>
   );
 }
