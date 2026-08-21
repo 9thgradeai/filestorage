@@ -15,7 +15,12 @@ import { useAuth } from '../../lib/auth';
 
 export default function RegisterPage() {
   const router = useRouter();
-  const { register, verifyEmail, resendOtp } = useAuth();
+  const { register, verifyEmail, resendOtp, user, loading: authLoading } = useAuth();
+
+  // Signed-in users have no business on the register page.
+  useEffect(() => {
+    if (!authLoading && user) router.replace('/dashboard');
+  }, [authLoading, user, router]);
 
   const [step, setStep] = useState<'form' | 'verify'>('form');
   const [name, setName] = useState('');

@@ -1678,6 +1678,7 @@ textarea:focus-visible {
   background: var(--surface-2);
 }
 .side-icon { color: var(--text-dim); display: inline-flex; }
+.side-icon-ai { color: var(--accent-strong); }
 .side-icon.active { color: var(--accent-strong); }
 .preview-main { flex: 1; padding: 1.2rem; min-width: 0; }
 .preview-head {
@@ -1885,56 +1886,6 @@ textarea:focus-visible {
 .code-block .tok-s { color: #7dd3fc; }
 .code-block .tok-n { color: #fbbf24; }
 
-/* ─── Pricing ────────────────────────────────────────────────────── */
-
-.pricing-grid {
-  display: grid;
-  grid-template-columns: repeat(3, 1fr);
-  gap: 1.25rem;
-  align-items: start;
-}
-.price-card {
-  border: 1px solid var(--border);
-  border-radius: var(--r-lg);
-  background: var(--surface);
-  padding: 2rem;
-  display: flex;
-  flex-direction: column;
-  gap: 1.25rem;
-}
-.price-card.highlight {
-  border-color: var(--accent-border);
-  background: radial-gradient(120% 80% at 50% 0%, rgba(16, 185, 129, 0.12), transparent 70%), var(--surface);
-  box-shadow: 0 0 0 1px var(--accent-border), 0 40px 90px -40px rgba(16, 185, 129, 0.3);
-}
-.price-pop {
-  align-self: flex-start;
-  font-family: var(--font-geist-mono), monospace;
-  font-size: 0.66rem;
-  letter-spacing: 0.16em;
-  text-transform: uppercase;
-  color: var(--on-accent);
-  background: var(--accent);
-  padding: 0.28rem 0.7rem;
-  border-radius: var(--r-pill);
-}
-.price-name { font-size: 1rem; font-weight: 600; }
-.price-tag { font-size: 2.4rem; font-weight: 800; letter-spacing: -0.04em; line-height: 1; }
-.price-per { font-size: 0.8rem; color: var(--text-dim); margin-top: 0.4rem; }
-.price-feats {
-  display: flex;
-  flex-direction: column;
-  gap: 0.65rem;
-  font-size: 0.9rem;
-  color: var(--text-muted);
-  list-style: none;
-  margin: 0;
-  padding: 1.25rem 0 0;
-  border-top: 1px solid var(--border);
-}
-.price-feats li { display: flex; gap: 0.55rem; align-items: center; }
-.price-feats .ok { color: var(--accent-strong); flex-shrink: 0; }
-
 /* ─── Testimonials ───────────────────────────────────────────────── */
 
 .quote-grid {
@@ -2062,7 +2013,6 @@ textarea:focus-visible {
 @media (max-width: 900px) {
   .hero-split { grid-template-columns: 1fr; gap: 3rem; padding-top: 3rem; }
   .guarantee-grid,
-  .pricing-grid,
   .quote-grid { grid-template-columns: 1fr; }
   .footer-grid { grid-template-columns: 1fr 1fr; }
   .sticky-card-head { grid-template-columns: 1fr; gap: 1.5rem; }
@@ -2085,7 +2035,6 @@ textarea:focus-visible {
   .sticky-stack { gap: 2.25rem; }
   .cta-band-big { padding: 3.5rem 1.25rem; }
   .quote-card { padding: 1.4rem; }
-  .price-card { padding: 1.6rem; }
   .faq-q { padding: 1rem 1.05rem; }
   .faq-a { padding: 0 1.05rem 1rem; }
   .format-strip { margin-top: 1.75rem; }

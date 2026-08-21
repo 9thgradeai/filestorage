@@ -23,7 +23,7 @@ function ShareCard() {
   return (
     <div className="link-card">
       <div className="dim">vault share launch-assets.zip</div>
-      <div className="link-url">https://vault.app/shared/9f2c1e8d...a41e</div>
+      <div className="link-url">https://…/shared/9f2c1e8d…a41e</div>
       <div className="row" style={{ gap: '0.35rem', marginTop: '0.5rem' }}>
         <span className="pulse-dot" style={{ width: 7, height: 7 }} />
         <span>expires_in_secs = 604800</span>
@@ -67,7 +67,7 @@ const CARDS = [
   {
     num: '03',
     title: 'Control everything from one place.',
-    body: 'Toggle files private, revoke public links, or delete the object from S3 entirely. Every action is one click, every action is logged.',
+    body: 'Toggle files private, revoke public links, or delete the object from S3 entirely. Star what matters, trash what does not, and restore it later if you change your mind.',
     visual: <Controls />,
   },
 ];

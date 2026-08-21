@@ -1,6 +1,6 @@
 'use client';
 
-import { Fingerprint, ArrowsClockwise, Hourglass, ShieldCheck } from '@phosphor-icons/react';
+import { Fingerprint, ArrowsClockwise, Hourglass, ShieldCheck, Sparkle } from '@phosphor-icons/react';
 import Reveal from './Reveal';
 
 export default function Features() {
@@ -67,8 +67,34 @@ export default function Features() {
                 after 7 days.
               </p>
               <div className="link-card">
-                <div className="link-url">vault.app/shared/9f2c...a41e</div>
+                <div className="link-url">/shared/9f2c…a41e</div>
                 <div>expires → in 7 days</div>
+              </div>
+            </div>
+          </Reveal>
+
+          <Reveal className="bento-wide" delay={0.08}>
+            <div className="bento-cell">
+              <span className="bento-icon" aria-hidden="true">
+                <Sparkle size={20} weight="duotone" />
+              </span>
+              <h3>AI that knows your vault</h3>
+              <p>
+                Ask in plain language — &quot;find my photos&quot;, &quot;how much storage do I
+                have?&quot;, &quot;star the report&quot;. The assistant searches, organizes, and
+                manages your files for you.
+              </p>
+              <div className="term-card">
+                <div><span className="dim">you: </span>find my photos</div>
+                <div>
+                  <span className="dim">vault ai: </span>Found 12 files matching
+                  &quot;photos&quot; <span className="ok">[shown]</span>
+                </div>
+                <div><span className="dim">you: </span>star the newest one</div>
+                <div>
+                  <span className="dim">vault ai: </span>Starred
+                  &quot;vacation-2026.jpg&quot; <span className="ok">[done]</span>
+                </div>
               </div>
             </div>
           </Reveal>

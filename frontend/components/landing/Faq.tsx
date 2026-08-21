@@ -12,11 +12,15 @@ const FAQS = [
   },
   {
     q: 'What encryption is used at rest?',
-    a: 'Files are stored private in your S3 bucket with server-side AES-256 encryption. They stream to your browser over TLS and are forced to download as attachments.',
+    a: 'Files are stored privately with server-side AES-256 encryption. They stream to your browser over TLS and are forced to download as attachments.',
   },
   {
     q: 'How are my sessions protected?',
     a: 'Access tokens live for 15 minutes inside HttpOnly cookies. Refresh tokens rotate on every use and are revoked server-side on logout, so nothing survives in localStorage.',
+  },
+  {
+    q: 'What can the AI assistant do?',
+    a: 'It manages your vault through natural language: search files, star, rename, move between folders, create folders, check storage, and more. It sees file names and metadata — never your file contents.',
   },
   {
     q: 'What file types are supported?',
@@ -24,7 +28,7 @@ const FAQS = [
   },
   {
     q: 'Where do my files actually live?',
-    a: 'In your own AWS S3 bucket. Vault never stores file bytes in the database, so there is no lock-in if you ever want to migrate.',
+    a: 'In encrypted AWS S3 storage. File bytes never touch the application database, so exports and migrations stay straightforward.',
   },
 ];
 

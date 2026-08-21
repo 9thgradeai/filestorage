@@ -1,6 +1,6 @@
 'use client';
 
-import { useState } from 'react';
+import { useEffect, useState } from 'react';
 import { useRouter } from 'next/navigation';
 import Link from 'next/link';
 import { SignIn, ShieldCheck, Eye, EyeSlash } from '@phosphor-icons/react';
@@ -13,13 +13,18 @@ interface LoginError extends Error {
 
 export default function LoginPage() {
   const router = useRouter();
-  const { login, resendOtp } = useAuth();
+  const { login, resendOtp, user, loading: authLoading } = useAuth();
   const [email, setEmail] = useState('');
   const [password, setPassword] = useState('');
   const [showPassword, setShowPassword] = useState(false);
   const [error, setError] = useState('');
   const [unverified, setUnverified] = useState(false);
   const [busy, setBusy] = useState(false);
+
+  // Signed-in users have no business on the login page.
+  useEffect(() => {
+    if (!authLoading && user) router.replace('/dashboard');
+  }, [authLoading, user, router]);
 
   const handleSubmit = async (e: React.FormEvent) => {
     e.preventDefault();

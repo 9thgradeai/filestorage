@@ -73,13 +73,15 @@ export default function Hero() {
             {user ? 'Open dashboard' : 'Get started'}
             <ArrowRight size={16} weight="bold" aria-hidden="true" />
           </Link>
-          <Link
-            href="/login"
-            className="btn btn-ghost"
-            style={{ fontSize: '1rem', padding: '0.85rem 1.6rem' }}
-          >
-            Sign in
-          </Link>
+          {!user && (
+            <Link
+              href="/login"
+              className="btn btn-ghost"
+              style={{ fontSize: '1rem', padding: '0.85rem 1.6rem' }}
+            >
+              Sign in
+            </Link>
+          )}
         </motion.div>
       </div>
 

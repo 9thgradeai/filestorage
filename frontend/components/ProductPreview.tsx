@@ -1,8 +1,9 @@
 import {
   LockKey,
-  LinkSimple,
-  Users,
+  Sparkle,
   ClockCounterClockwise,
+  Star,
+  TrashSimple,
   DownloadSimple,
   ShareNetwork,
   CloudArrowUp,
@@ -24,21 +25,24 @@ export function ProductPreview() {
         <span className="preview-dot" />
         <span className="preview-dot" />
         <span className="preview-dot" />
-        <span className="preview-url">vault.app/dashboard</span>
+          <span className="preview-url">/dashboard</span>
       </div>
       <div className="preview-body">
         <div className="preview-side">
           <span className="side-icon active" title="Files">
             <LockKey size={17} weight="duotone" />
           </span>
-          <span className="side-icon" title="Share links">
-            <LinkSimple size={17} weight="duotone" />
-          </span>
-          <span className="side-icon" title="Team">
-            <Users size={17} weight="duotone" />
-          </span>
-          <span className="side-icon" title="Activity">
+          <span className="side-icon" title="Recent">
             <ClockCounterClockwise size={17} weight="duotone" />
+          </span>
+          <span className="side-icon" title="Starred">
+            <Star size={17} weight="duotone" />
+          </span>
+          <span className="side-icon" title="Trash">
+            <TrashSimple size={17} weight="duotone" />
+          </span>
+          <span className="side-icon side-icon-ai" title="AI Assistant">
+            <Sparkle size={17} weight="duotone" />
           </span>
         </div>
         <div className="preview-main">

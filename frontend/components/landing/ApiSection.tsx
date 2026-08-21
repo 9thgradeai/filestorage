@@ -4,18 +4,18 @@ import { TerminalWindow, Copy } from '@phosphor-icons/react';
 import Reveal from './Reveal';
 
 const SNIPPET = `# register a user
-curl -X POST https://vault.app/api/auth/register \\
+curl -X POST $VAULT_URL/api/auth/register \\
   -H "Content-Type: application/json" \\
   -d '{"email":"you@company.com","password":"Str0ng!Pass1"}'
 
 # upload a file (magic bytes are checked server-side)
-curl -X POST https://vault.app/api/files/upload \\
+curl -X POST $VAULT_URL/api/files/upload \\
   -H "X-CSRF-Token: $CSRF" \\
   -F "file=@contract.pdf"
 
 # mint an expiring share link
-curl -X POST https://vault.app/api/files/1/share
-# → { "share_url": "https://vault.app/shared/9f2c...a41e" }`;
+curl -X POST $VAULT_URL/api/files/1/share
+# → { "share_url": "$VAULT_URL/shared/9f2c...a41e" }`;
 
 export default function ApiSection() {
   return (
@@ -26,11 +26,11 @@ export default function ApiSection() {
             <div className="sec-head" style={{ marginBottom: 0 }}>
               <h2>Built for developers.</h2>
               <p>
-                A clean JSON API, cookie-first auth that also speaks Bearer tokens, and no vendor
-                lock-in. Your files live in your own S3 bucket.
+                A clean JSON API and cookie-first auth that also speaks Bearer tokens. Every
+                capability of the dashboard is scriptable.
               </p>
               <div className="row" style={{ marginTop: '1.5rem', gap: '0.9rem', flexWrap: 'wrap' }}>
-                {['JSON everywhere', 'CSRF-aware clients', 'Own your S3 bucket'].map((t) => (
+                {['JSON everywhere', 'CSRF-aware clients', 'Bearer-friendly'].map((t) => (
                   <span key={t} className="format-pill">
                     {t}
                   </span>

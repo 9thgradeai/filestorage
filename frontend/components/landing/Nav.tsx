@@ -9,7 +9,6 @@ import { Brand } from '../Brand';
 const LINKS = [
   { label: 'Features', href: '#features' },
   { label: 'Security', href: '#security' },
-  { label: 'Pricing', href: '#pricing' },
   { label: 'FAQ', href: '#faq' },
 ];
 
@@ -38,9 +37,11 @@ export default function Nav() {
             {l.label}
           </a>
         ))}
-        <Link href="/login" className="link" onClick={() => setOpen(false)}>
-          Sign in
-        </Link>
+        {!user && (
+          <Link href="/login" className="link" onClick={() => setOpen(false)}>
+            Sign in
+          </Link>
+        )}
         <Link
           href={user ? '/dashboard' : '/register'}
           className="btn btn-secondary btn-sm"

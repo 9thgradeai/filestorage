@@ -1,6 +1,7 @@
 'use client';
 
 import Link from 'next/link';
+import { useAuth } from '../../lib/auth';
 import { Brand } from '../Brand';
 
 const COLS = [
@@ -9,14 +10,7 @@ const COLS = [
     links: [
       { label: 'Features', href: '/#features' },
       { label: 'Security', href: '/#security' },
-      { label: 'Pricing', href: '/#pricing' },
-    ],
-  },
-  {
-    title: 'Developers',
-    links: [
-      { label: 'Documentation', href: '#' },
-      { label: 'API Reference', href: '#' },
+      { label: 'FAQ', href: '/#faq' },
     ],
   },
   {
@@ -29,6 +23,8 @@ const COLS = [
 ];
 
 export default function Footer() {
+  const { user } = useAuth();
+
   return (
     <footer style={{ borderTop: '1px solid var(--border)' }}>
       <div className="footer-grid">
@@ -48,14 +44,22 @@ export default function Footer() {
         ))}
       </div>
       <div className="footer-bottom">
-        <span className="dim text-sm">&copy; 2026 Vault</span>
+        <span className="dim text-sm">&copy; {new Date().getFullYear()} Vault</span>
         <div className="row" style={{ gap: '1.2rem' }}>
-          <Link href="/login" className="link text-sm">
-            Sign in
-          </Link>
-          <Link href="/register" className="link text-sm">
-            Get started
-          </Link>
+          {user ? (
+            <Link href="/dashboard" className="link text-sm">
+              Dashboard
+            </Link>
+          ) : (
+            <>
+              <Link href="/login" className="link text-sm">
+                Sign in
+              </Link>
+              <Link href="/register" className="link text-sm">
+                Get started
+              </Link>
+            </>
+          )}
           <span className="brand-mono">EXPRESS &middot; POSTGRES &middot; S3 &middot; NEXT.JS</span>
         </div>
       </div>

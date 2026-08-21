@@ -1,6 +1,7 @@
 'use client';
 
 import { useEffect, useState } from 'react';
+import { useRouter } from 'next/navigation';
 import Link from 'next/link';
 import {
   Key,
@@ -15,7 +16,13 @@ import { useAuth } from '../../lib/auth';
 type Step = 'email' | 'reset' | 'done';
 
 export default function ForgotPasswordPage() {
-  const { forgotPassword, resetPassword, resendOtp } = useAuth();
+  const router = useRouter();
+  const { forgotPassword, resetPassword, resendOtp, user, loading: authLoading } = useAuth();
+
+  // Signed-in users don't need a password reset.
+  useEffect(() => {
+    if (!authLoading && user) router.replace('/dashboard');
+  }, [authLoading, user, router]);
 
   const [step, setStep] = useState<Step>('email');
   const [email, setEmail] = useState('');
