@@ -1,6 +1,6 @@
 'use client';
 
-import { useMemo, useState, useRef, useCallback, useEffect } from 'react';
+import { useMemo, useState, useRef, useEffect } from 'react';
 import Link from 'next/link';
 import {
   HouseSimple,
@@ -81,16 +81,13 @@ export default function DashboardSidebar({
   };
 
   useEffect(() => {
-    document.addEventListener('click', (e) => {
+    const handleClickOutside = (e: MouseEvent) => {
       if (menuRef.current && !menuRef.current.contains(e.target as Node)) {
         setMenuFor(null);
       }
-    });
-    return () => document.removeEventListener('click', (e) => {
-      if (menuRef.current && !menuRef.current.contains(e.target as Node)) {
-        setMenuFor(null);
-      }
-    });
+    };
+    document.addEventListener('click', handleClickOutside);
+    return () => document.removeEventListener('click', handleClickOutside);
   }, []);
 
   const navItems: NavItem[] = [

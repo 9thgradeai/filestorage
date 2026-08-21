@@ -125,11 +125,12 @@ export default function PreviewModal({ file, onClose, onStarred }: Props) {
             onClick={async () => {
               try {
                 const { blob, filename } = await driveApi.download(file.id);
+                const url = URL.createObjectURL(blob);
                 const a = document.createElement('a');
-                a.href = URL.createObjectURL(blob);
+                a.href = url;
                 a.download = filename;
                 a.click();
-                setTimeout(() => URL.revokeObjectURL(a.href), 4000);
+                setTimeout(() => URL.revokeObjectURL(url), 4000);
               } catch {
                 // toast handled by parent via action
               }

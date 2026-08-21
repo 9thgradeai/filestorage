@@ -52,7 +52,7 @@ export default function DashboardPage() {
 
   const folderMap = useMemo(() => new Map(folders.map((f) => [f.id, f])), [folders]);
 
-  const refreshStats = useCallback(async (modeOverride?: DriveMode) => {
+  const refreshStats = useCallback(async () => {
     try {
       setStats(await driveApi.getStats());
     } catch {
@@ -60,7 +60,7 @@ export default function DashboardPage() {
     }
   }, []);
 
-  const refreshFolders = useCallback(async (modeOverride?: DriveMode) => {
+  const refreshFolders = useCallback(async () => {
     try {
       const data = await driveApi.listFolders();
       setFolders(data.folders);
@@ -68,9 +68,6 @@ export default function DashboardPage() {
       // non-critical
     }
   }, []);
-
-  const setModeTrash = useCallback(() => setMode('trash'), []);
-  const setModeAll = useCallback(() => setMode('all'), []);
 
   const reload = useCallback(
     async (page = pagination.page, modeOverride?: DriveMode) => {
@@ -118,14 +115,7 @@ export default function DashboardPage() {
     refreshStats();
     reload(1, mode);
     // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, [authLoading, user, router, mode]);
-
-  useEffect(() => {
-    if (authLoading) return;
-    reload(1, mode);
-    setSelected(new Set());
-    // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, [mode, folderId, search, sort, order, type]);
+  }, [authLoading, user, router, mode, folderId, search, sort, order, type]);
 
   // If the folder being viewed was deleted/trashed, drop back to root.
   useEffect(() => {
@@ -196,7 +186,7 @@ export default function DashboardPage() {
       });
 
       const finish = () => {
-        refreshStats(mode);
+        refreshStats();
         reload(1, mode);
       };
 
@@ -265,7 +255,7 @@ export default function DashboardPage() {
           case 'unstar':
             await driveApi.starFile(file.id, action === 'star');
             toast.success(action === 'star' ? 'Starred' : 'Unstarred');
-            refreshStats(mode);
+            refreshStats();
             reload(1, mode);
             break;
           case 'share':
@@ -284,13 +274,13 @@ export default function DashboardPage() {
           case 'trash':
             await driveApi.trashFile(file.id);
             toast.success('Moved to trash');
-            refreshStats(mode);
+            refreshStats();
             reload(1, 'trash');
             break;
           case 'restore':
             await driveApi.restoreFile(file.id);
             toast.success('File restored');
-            refreshStats(mode);
+            refreshStats();
             reload(1, 'all');
             break;
           case 'delete':
@@ -301,7 +291,7 @@ export default function DashboardPage() {
         toast.error(err.message || 'Action failed');
       }
     },
-    [doDownload, refreshStats, reload]
+    [doDownload, refreshStats, reload, mode]
   );
 
   const handleBulkAction = useCallback(
@@ -321,13 +311,11 @@ export default function DashboardPage() {
           }
         }
         toast.success(`${targets.length} ${targets.length === 1 ? 'file' : 'files'} updated`);
-        refreshStats(mode);
-        reload(1, mode);
       } catch (err: any) {
         toast.error(err.message || 'Bulk action failed');
       } finally {
         setSelected(new Set());
-        refreshStats(mode);
+        refreshStats();
         reload(1, mode);
       }
     },
@@ -340,14 +328,14 @@ export default function DashboardPage() {
       try {
         await driveApi.trashFolder(f.id);
         toast.success('Folder moved to trash');
-        refreshFolders(mode);
-        refreshStats(mode);
+        refreshFolders();
+        refreshStats();
         reload(1, 'trash');
       } catch (err: any) {
         toast.error(err.message || 'Action failed');
       }
     },
-    [refreshFolders, refreshStats, reload, mode]
+    [refreshFolders, refreshStats, reload]
   );
 
   const restoreFolder = useCallback(
@@ -355,14 +343,14 @@ export default function DashboardPage() {
       try {
         await driveApi.restoreFolder(f.id);
         toast.success('Folder restored');
-        refreshFolders(mode);
-        refreshStats(mode);
+        refreshFolders();
+        refreshStats();
         reload(1, 'all');
       } catch (err: any) {
         toast.error(err.message || 'Action failed');
       }
     },
-    [refreshFolders, refreshStats, reload, mode]
+    [refreshFolders, refreshStats, reload]
   );
 
   const confirmDelete = useCallback(
@@ -370,12 +358,12 @@ export default function DashboardPage() {
       try {
         if (target.type === 'folder') {
           await driveApi.deleteFolder(target.id);
-          refreshFolders(mode);
+          refreshFolders();
         } else {
           await driveApi.deleteFile(target.id);
         }
         toast.success('Deleted permanently');
-        refreshStats(mode);
+        refreshStats();
         reload(1, mode);
       } catch (err: any) {
         toast.error(err.message || 'Could not delete');
@@ -435,10 +423,10 @@ export default function DashboardPage() {
       const parent = mode === 'folder' ? folderId : null;
       await driveApi.createFolder(name, parent);
       toast.success('Folder created');
-      refreshFolders(mode);
+      refreshFolders();
       reload(1, mode);
     },
-    [mode, folderId, refreshFolders, reload, mode]
+    [mode, folderId, refreshFolders, reload]
   );
 
   if (authLoading) {
@@ -520,8 +508,13 @@ export default function DashboardPage() {
             const crumb = crumbs[index];
             setSelected(new Set());
             setSearch('');
-            setMode('all');
-            setFolderId(crumb.id);
+            if (crumb.id === null) {
+              setMode('all');
+              setFolderId(null);
+            } else {
+              setMode('folder');
+              setFolderId(crumb.id);
+            }
           }}
           sort={sort}
           order={order}

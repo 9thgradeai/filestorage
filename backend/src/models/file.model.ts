@@ -131,8 +131,6 @@ export const FileModel = {
       values.push(userId);
     }
 
-    query += ' ORDER BY created_at DESC';
-
     const result = await pool.query(query, values);
     return result.rows[0] || null;
   },

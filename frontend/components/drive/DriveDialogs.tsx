@@ -103,7 +103,9 @@ export default function DriveDialogs({
     }
     if (dialog.kind === 'share' && dialog.file) {
       const file = dialog.file;
+      let cancelled = false;
       const finish = (url: string) => {
+        if (cancelled) return;
         setShareUrl(url);
         navigator.clipboard.writeText(url).catch(() => {});
         setCopied(true);
@@ -113,6 +115,7 @@ export default function DriveDialogs({
         const url = await onGenerateShare(file);
         finish(url);
       })().catch(() => {});
+      return () => { cancelled = true; };
     }
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [dialog]);

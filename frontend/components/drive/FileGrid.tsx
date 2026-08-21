@@ -1,6 +1,6 @@
 'use client';
 
-import { useState, useRef, useCallback, useEffect } from 'react';
+import { useState, useRef, useEffect } from 'react';
 import {
   Folder as FolderIcon,
   DownloadSimple,
@@ -50,10 +50,6 @@ interface Props {
   onBulkAction: (action: FileAction) => void;
 }
 
-function isImage(file: DriveFile): boolean {
-  return !!file.mime_type?.startsWith('image/');
-}
-
 export default function FileGrid({
   folders,
   files,
@@ -71,79 +67,8 @@ export default function FileGrid({
   onBulkAction,
 }: Props) {
   const [menuFor, setMenuFor] = useState<number | null>(null);
-  const menuRef = useRef<HTMLDivElement>(null);
   const inTrash = mode === 'trash';
   const anySelected = selected.size > 0;
-
-  const actionsFor = (file: DriveFile) => {
-    if (inTrash) {
-      return (
-        <>
-          <button onClick={() => onFileAction('restore', file)}>
-            <ArrowClockwise size={14} weight="bold" /> Restore
-          </button>
-          <button className="danger" onClick={() => onFileAction('delete', file)}>
-            <TrashSimple size={14} weight="bold" /> Delete forever
-          </button>
-        </>
-      );
-    }
-    return (
-      <>
-        <button onClick={() => onFileAction('preview', file)}>
-          <Eye size={14} weight="bold" /> Preview
-        </button>
-        <button onClick={() => onFileAction('download', file)}>
-          <DownloadSimple size={14} weight="bold" /> Download
-        </button>
-        <button onClick={() => onFileAction('rename', file)}>
-          <PencilSimple size={14} weight="bold" /> Rename
-        </button>
-        <button onClick={() => onFileAction('move', file)}>
-          <ArrowsOut size={14} weight="bold" /> Move
-        </button>
-        <button onClick={() => onFileAction(file.starred ? 'unstar' : 'star', file)}>
-          <Star size={14} weight={file.starred ? 'fill' : 'bold'} /> {file.starred ? 'Unstar' : 'Star'}
-        </button>
-        {file.is_public ? (
-          <button onClick={() => onFileAction('share', file)}>
-            <LinkSimple size={14} weight="bold" /> Copy link
-          </button>
-        ) : (
-          <button onClick={() => onFileAction('makePublic', file)}>
-            <LinkSimple size={14} weight="bold" /> Make public
-          </button>
-        )}
-        {file.is_public && (
-          <button onClick={() => onFileAction('makePrivate', file)}>
-            <EyeSlash size={14} weight="bold" /> Make private
-          </button>
-        )}
-        <button className="danger" onClick={() => onFileAction('trash', file)}>
-          <TrashSimple size={14} weight="bold" /> Move to trash
-        </button>
-      </>
-    );
-  };
-
-  const renderFileActions = (file: DriveFile) => {
-    const handleOutsideClick = useCallback((e: MouseEvent) => {
-      if (menuRef.current && !menuRef.current.contains(e.target as Node)) {
-        setMenuFor(null);
-      }
-    }, []);
-
-    useEffect(() => {
-      document.addEventListener('click', handleOutsideClick);
-      return () => document.removeEventListener('click', handleOutsideClick);
-    }, [handleOutsideClick]);
-
-    return (
-      <div className="drive-menu" onClick={(e) => e.stopPropagation()} ref={menuRef}>
-        {actionsFor(file)}
-      </div>
-    );
-  };
 
   // ── Grid view ────────────────────────────────────────────────────────
   if (view === 'grid') {
@@ -207,7 +132,7 @@ export default function FileGrid({
                 </div>
                 <button
                   className="file-card-main"
-                  onClick={() => (isImage(file) ? onOpenFile(file) : onOpenFile(file))}
+                  onClick={() => onOpenFile(file)}
                 >
                   <span className="file-type">
                     <FileTypeIcon name={file.original_filename} size={24} />
@@ -256,7 +181,14 @@ onClick={(e) => {
                   >
                     <DotsThreeVertical size={15} weight="bold" />
                   </button>
-                  {menuFor === file.id && renderFileActions(file)}
+                  {menuFor === file.id && (
+                    <FileContextMenu
+                      file={file}
+                      inTrash={inTrash}
+                      onFileAction={onFileAction}
+                      onClose={() => setMenuFor(null)}
+                    />
+                  )}
                 </div>
               </div>
             ))}
@@ -378,12 +310,93 @@ onClick={(e) => {
                 >
                   <DotsThreeVertical size={15} weight="bold" />
                 </button>
-                {menuFor === file.id && renderFileActions(file)}
+                {menuFor === file.id && (
+                  <FileContextMenu
+                    file={file}
+                    inTrash={inTrash}
+                    onFileAction={onFileAction}
+                    onClose={() => setMenuFor(null)}
+                  />
+                )}
               </span>
             </div>
           ))}
         </div>
       )}
+    </div>
+  );
+}
+
+function FileContextMenu({
+  file,
+  inTrash,
+  onFileAction,
+  onClose,
+}: {
+  file: DriveFile;
+  inTrash: boolean;
+  onFileAction: (action: FileAction, file: DriveFile) => void;
+  onClose: () => void;
+}) {
+  const menuRef = useRef<HTMLDivElement>(null);
+
+  useEffect(() => {
+    const handleOutsideClick = (e: MouseEvent) => {
+      if (menuRef.current && !menuRef.current.contains(e.target as Node)) {
+        onClose();
+      }
+    };
+    document.addEventListener('click', handleOutsideClick);
+    return () => document.removeEventListener('click', handleOutsideClick);
+  }, [onClose]);
+
+  if (inTrash) {
+    return (
+      <div className="drive-menu" onClick={(e) => e.stopPropagation()} ref={menuRef}>
+        <button onClick={() => { onFileAction('restore', file); onClose(); }}>
+          <ArrowClockwise size={14} weight="bold" /> Restore
+        </button>
+        <button className="danger" onClick={() => { onFileAction('delete', file); onClose(); }}>
+          <TrashSimple size={14} weight="bold" /> Delete forever
+        </button>
+      </div>
+    );
+  }
+
+  return (
+    <div className="drive-menu" onClick={(e) => e.stopPropagation()} ref={menuRef}>
+      <button onClick={() => { onFileAction('preview', file); onClose(); }}>
+        <Eye size={14} weight="bold" /> Preview
+      </button>
+      <button onClick={() => { onFileAction('download', file); onClose(); }}>
+        <DownloadSimple size={14} weight="bold" /> Download
+      </button>
+      <button onClick={() => { onFileAction('rename', file); onClose(); }}>
+        <PencilSimple size={14} weight="bold" /> Rename
+      </button>
+      <button onClick={() => { onFileAction('move', file); onClose(); }}>
+        <ArrowsOut size={14} weight="bold" /> Move
+      </button>
+      <button onClick={() => { onFileAction(file.starred ? 'unstar' : 'star', file); onClose(); }}>
+        <Star size={14} weight={file.starred ? 'fill' : 'bold'} /> {file.starred ? 'Unstar' : 'Star'}
+      </button>
+      {file.is_public ? (
+        <button onClick={() => { onFileAction('share', file); onClose(); }}>
+          <LinkSimple size={14} weight="bold" /> Copy link
+        </button>
+      ) : (
+        <button onClick={() => { onFileAction('makePublic', file); onClose(); }}>
+          <LinkSimple size={14} weight="bold" /> Make public
+        </button>
+      )}
+      {file.is_public && (
+        <button onClick={() => { onFileAction('makePrivate', file); onClose(); }}>
+          <EyeSlash size={14} weight="bold" /> Make private
+        </button>
+      )}
+      <button className="danger" onClick={() => { onFileAction('trash', file); onClose(); }}>
+        <TrashSimple size={14} weight="bold" /> Move to trash
+      </button>
     </div>
   );
 }

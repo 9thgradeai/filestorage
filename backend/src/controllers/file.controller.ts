@@ -267,6 +267,12 @@ export const restoreFile = async (req: Request, res: Response) => {
   if (!id) return res.status(StatusCodes.BAD_REQUEST).json({ message: 'Invalid file ID' });
 
   try {
+    const file = await FileModel.findFileById(id, userId);
+    if (!file) return res.status(StatusCodes.NOT_FOUND).json({ message: 'File not found' });
+    if (!file.trashed_at) {
+      return res.status(StatusCodes.BAD_REQUEST).json({ message: 'File is not in trash' });
+    }
+
     const updated = await FileModel.restoreFile(id, userId);
     if (!updated) return res.status(StatusCodes.NOT_FOUND).json({ message: 'File not found' });
     return res.status(StatusCodes.OK).json({ file: updated, message: 'File restored' });
