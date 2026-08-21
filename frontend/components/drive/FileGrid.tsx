@@ -1,6 +1,6 @@
 'use client';
 
-import { useState } from 'react';
+import { useState, useRef, useCallback, useEffect } from 'react';
 import {
   Folder as FolderIcon,
   DownloadSimple,
@@ -71,6 +71,7 @@ export default function FileGrid({
   onBulkAction,
 }: Props) {
   const [menuFor, setMenuFor] = useState<number | null>(null);
+  const menuRef = useRef<HTMLDivElement>(null);
   const inTrash = mode === 'trash';
   const anySelected = selected.size > 0;
 
@@ -125,11 +126,24 @@ export default function FileGrid({
     );
   };
 
-  const renderFileActions = (file: DriveFile) => (
-    <div className="drive-menu" onClick={(e) => e.stopPropagation()}>
-      {actionsFor(file)}
-    </div>
-  );
+  const renderFileActions = (file: DriveFile) => {
+    const handleOutsideClick = useCallback((e: MouseEvent) => {
+      if (menuRef.current && !menuRef.current.contains(e.target as Node)) {
+        setMenuFor(null);
+      }
+    }, []);
+
+    useEffect(() => {
+      document.addEventListener('click', handleOutsideClick);
+      return () => document.removeEventListener('click', handleOutsideClick);
+    }, [handleOutsideClick]);
+
+    return (
+      <div className="drive-menu" onClick={(e) => e.stopPropagation()} ref={menuRef}>
+        {actionsFor(file)}
+      </div>
+    );
+  };
 
   // ── Grid view ────────────────────────────────────────────────────────
   if (view === 'grid') {
@@ -233,7 +247,10 @@ export default function FileGrid({
                   <span style={{ flex: 1 }} />
                   <button
                     className="btn btn-secondary btn-sm"
-                    onClick={() => setMenuFor(menuFor === file.id ? null : file.id)}
+onClick={(e) => {
+                      e.stopPropagation();
+                      setMenuFor(menuFor === file.id ? null : file.id);
+                    }}
                     aria-label="More actions"
                     title="More actions"
                   >
@@ -354,7 +371,10 @@ export default function FileGrid({
                 <button
                   className="btn-icon"
                   aria-label="More actions"
-                  onClick={() => setMenuFor(menuFor === file.id ? null : file.id)}
+                  onClick={(e) => {
+                      e.stopPropagation();
+                      setMenuFor(menuFor === file.id ? null : file.id);
+                    }}
                 >
                   <DotsThreeVertical size={15} weight="bold" />
                 </button>

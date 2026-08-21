@@ -1,6 +1,6 @@
 'use client';
 
-import { useMemo, useState } from 'react';
+import { useMemo, useState, useRef, useCallback, useEffect } from 'react';
 import Link from 'next/link';
 import {
   HouseSimple,
@@ -59,6 +59,7 @@ export default function DashboardSidebar({
 }: Props) {
   const [expanded, setExpanded] = useState<Set<number>>(new Set());
   const [menuFor, setMenuFor] = useState<number | null>(null);
+  const menuRef = useRef<HTMLDivElement>(null);
 
   const childrenOf = useMemo(() => {
     const map = new Map<number | null, Folder[]>();
@@ -78,6 +79,19 @@ export default function DashboardSidebar({
       return next;
     });
   };
+
+  useEffect(() => {
+    document.addEventListener('click', (e) => {
+      if (menuRef.current && !menuRef.current.contains(e.target as Node)) {
+        setMenuFor(null);
+      }
+    });
+    return () => document.removeEventListener('click', (e) => {
+      if (menuRef.current && !menuRef.current.contains(e.target as Node)) {
+        setMenuFor(null);
+      }
+    });
+  }, []);
 
   const navItems: NavItem[] = [
     { key: 'all', label: 'My Files', icon: HouseSimple },
