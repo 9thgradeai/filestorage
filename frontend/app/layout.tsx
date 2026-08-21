@@ -45,11 +45,19 @@ export const metadata = {
 export const viewport = {
   width: 'device-width',
   initialScale: 1,
+  viewportFit: 'cover' as const,
+  interactiveWidget: 'resizes-content' as const,
 };
 
 export default function RootLayout({ children }: { children: ReactNode }) {
   return (
     <html lang="en" className={`${geistSans.variable} ${geistMono.variable}`}>
+      <head>
+        {/* If JS fails/disabled, landing reveal animations must not hide content. */}
+        <noscript>
+          <style>{`.rvl{opacity:1 !important;transform:none !important}`}</style>
+        </noscript>
+      </head>
       <body>
         <a href="#main" className="skip-link">
           Skip to content

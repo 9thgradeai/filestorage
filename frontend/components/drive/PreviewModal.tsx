@@ -65,8 +65,16 @@ export default function PreviewModal({ file, onClose, onStarred }: Props) {
     const onKey = (e: KeyboardEvent) => {
       if (e.key === 'Escape') onClose();
     };
+    // Lock body scroll while open; restore focus to the trigger on close.
+    const previouslyFocused = document.activeElement as HTMLElement | null;
+    const overflowPrev = document.body.style.overflow;
+    document.body.style.overflow = 'hidden';
     window.addEventListener('keydown', onKey);
-    return () => window.removeEventListener('keydown', onKey);
+    return () => {
+      document.body.style.overflow = overflowPrev;
+      window.removeEventListener('keydown', onKey);
+      previouslyFocused?.focus?.();
+    };
   }, [onClose]);
 
   return (

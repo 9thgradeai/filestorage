@@ -70,6 +70,7 @@ export default function SettingsPage() {
   const handleProfile = async (e: React.FormEvent) => {
     e.preventDefault();
     if (!name.trim()) return toast.error('Name is required');
+    if (name.trim() === user.name) return;
     setProfileBusy(true);
     try {
       await updateProfile(name.trim());
@@ -173,8 +174,12 @@ export default function SettingsPage() {
                 {user.email_verified ? 'Verified' : 'Not verified'}
               </span>
             </div>
-            <button type="submit" className="btn btn-primary" disabled={profileBusy}>
-              {profileBusy ? 'Saving...' : 'Save Changes'}
+            <button
+              type="submit"
+              className="btn btn-primary"
+              disabled={profileBusy || !name.trim() || name.trim() === user.name}
+            >
+              {profileBusy ? 'Saving...' : name.trim() === user.name ? 'Saved' : 'Save Changes'}
             </button>
           </form>
         </section>

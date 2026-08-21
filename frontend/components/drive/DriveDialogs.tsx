@@ -1,6 +1,7 @@
 'use client';
 
 import { useEffect, useMemo, useState } from 'react';
+import toast from 'react-hot-toast';
 import { X, Folder as FolderIcon, Check, LinkSimple, Triangle, Copy } from '@phosphor-icons/react';
 import type { DriveFile, Folder } from '../../lib/drive';
 
@@ -114,11 +115,33 @@ export default function DriveDialogs({
         if (!file.is_public) await onMakePublic(file);
         const url = await onGenerateShare(file);
         finish(url);
-      })().catch(() => {});
+      })().catch((err: any) => {
+        if (!cancelled) {
+          toast.error(err?.message || 'Could not generate share link');
+          onClose();
+        }
+      });
       return () => { cancelled = true; };
     }
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [dialog]);
+
+  // Escape closes; body scroll locks while open; focus returns to trigger on close.
+  useEffect(() => {
+    if (!dialog) return;
+    const previouslyFocused = document.activeElement as HTMLElement | null;
+    const overflowPrev = document.body.style.overflow;
+    document.body.style.overflow = 'hidden';
+    const handleKey = (e: KeyboardEvent) => {
+      if (e.key === 'Escape' && !busy) onClose();
+    };
+    document.addEventListener('keydown', handleKey);
+    return () => {
+      document.body.style.overflow = overflowPrev;
+      document.removeEventListener('keydown', handleKey);
+      previouslyFocused?.focus?.();
+    };
+  }, [dialog, busy, onClose]);
 
   const allowedParents = useMemo(() => {
     if (!moveTarget) return folders;
@@ -160,6 +183,8 @@ export default function DriveDialogs({
         await onMoveFolder(moveTarget.item as Folder, dest);
       }
       onClose();
+    } catch (err: any) {
+      toast.error(err?.message || 'Move failed');
     } finally {
       setBusy(false);
     }
@@ -185,6 +210,8 @@ export default function DriveDialogs({
               try {
                 await onCreateFolder(name.trim());
                 onClose();
+              } catch (err: any) {
+                toast.error(err?.message || 'Could not create folder');
               } finally {
                 setBusy(false);
               }
@@ -227,6 +254,8 @@ export default function DriveDialogs({
                   await onRenameFolder(dialog.folder, name.trim());
                 }
                 onClose();
+              } catch (err: any) {
+                toast.error(err?.message || 'Rename failed');
               } finally {
                 setBusy(false);
               }
@@ -355,6 +384,8 @@ export default function DriveDialogs({
                   try {
                     await onConfirmDelete(target);
                     onClose();
+                  } catch (err: any) {
+                    toast.error(err?.message || 'Delete failed');
                   } finally {
                     setBusy(false);
                   }

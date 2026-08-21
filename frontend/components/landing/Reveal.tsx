@@ -19,7 +19,7 @@ export default function Reveal({
   const reduce = useReducedMotion();
   return (
     <motion.div
-      className={className}
+      className={`rvl ${className ?? ''}`}
       initial={reduce ? false : { opacity: 0, y }}
       whileInView={{ opacity: 1, y: 0 }}
       viewport={{ once: true, amount: 0.25 }}

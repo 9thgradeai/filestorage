@@ -48,6 +48,7 @@ export default function DashboardPage() {
   const [dialog, setDialog] = useState<DialogState | null>(null);
   const [sidebarOpen, setSidebarOpen] = useState(false);
   const [dragOver, setDragOver] = useState(false);
+  const [loadError, setLoadError] = useState<string | null>(null);
   const dragDepth = useRef(0);
 
   const folderMap = useMemo(() => new Map(folders.map((f) => [f.id, f])), [folders]);
@@ -72,6 +73,7 @@ export default function DashboardPage() {
   const reload = useCallback(
     async (page = pagination.page, modeOverride?: DriveMode) => {
       setLoading(true);
+      setLoadError(null);
       try {
         const effectiveMode = modeOverride || mode;
         if (effectiveMode === 'recent') {
@@ -97,7 +99,7 @@ export default function DashboardPage() {
           setPagination(data.pagination);
         }
       } catch (err: any) {
-        toast.error(err.message || 'Failed to load files');
+        setLoadError(err.message || 'Failed to load files');
       } finally {
         setLoading(false);
       }
@@ -130,7 +132,16 @@ export default function DashboardPage() {
     setSearch('');
     setMode(m);
     setFolderId(fid);
-    setSidebarOpen(false);
+    // Reflect the view in history so browser Back moves up/out of folders
+    // instead of leaving the dashboard.
+    try {
+      window.history.pushState(
+        { drive: true, mode: m, folderId: fid },
+        ''
+      );
+    } catch {
+      // history unavailable — navigation still works, back just exits
+    }
   }, []);
 
   const openFolder = useCallback((id: number) => {
@@ -138,6 +149,29 @@ export default function DashboardPage() {
     setSearch('');
     setMode('folder');
     setFolderId(id);
+    try {
+      window.history.pushState({ drive: true, mode: 'folder', folderId: id }, '');
+    } catch {
+      // ignore
+    }
+  }, []);
+
+  // Browser Back / Forward restore the previous drive view.
+  useEffect(() => {
+    const onPopState = (e: PopStateEvent) => {
+      const s = e.state as { drive?: boolean; mode?: DriveMode; folderId?: number | null } | null;
+      setSelected(new Set());
+      setSearch('');
+      if (s?.drive && s.mode) {
+        setMode(s.mode);
+        setFolderId(s.folderId ?? null);
+      } else {
+        setMode('all');
+        setFolderId(null);
+      }
+    };
+    window.addEventListener('popstate', onPopState);
+    return () => window.removeEventListener('popstate', onPopState);
   }, []);
 
   const crumbs = useMemo<Crumb[]>(() => {
@@ -256,7 +290,7 @@ export default function DashboardPage() {
             await driveApi.starFile(file.id, action === 'star');
             toast.success(action === 'star' ? 'Starred' : 'Unstarred');
             refreshStats();
-            reload(1, mode);
+            reload();
             break;
           case 'share':
             setDialog({ kind: 'share', file });
@@ -269,7 +303,7 @@ export default function DashboardPage() {
           case 'makePrivate':
             await driveApi.togglePublic(file.id, false);
             toast.success('File is now private');
-            reload(1, mode);
+            reload();
             break;
           case 'trash':
             await driveApi.trashFile(file.id);
@@ -428,11 +462,16 @@ export default function DashboardPage() {
 
   const createFolder = useCallback(
     async (name: string) => {
-      const parent = mode === 'folder' ? folderId : null;
-      await driveApi.createFolder(name, parent);
-      toast.success('Folder created');
-      refreshFolders();
-      reload(1, mode);
+      try {
+        const parent = mode === 'folder' ? folderId : null;
+        await driveApi.createFolder(name, parent);
+        toast.success('Folder created');
+        refreshFolders();
+        reload();
+      } catch (err: any) {
+        toast.error(err.message || 'Could not create folder');
+        throw err;
+      }
     },
     [mode, folderId, refreshFolders, reload]
   );
@@ -562,6 +601,8 @@ export default function DashboardPage() {
             loading={loading}
             search={search}
             selected={selected}
+            error={loadError}
+            onRetry={() => reload()}
             onToggleSelect={(id) =>
               setSelected((prev) => {
                 const next = new Set(prev);

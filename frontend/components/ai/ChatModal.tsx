@@ -15,6 +15,7 @@ import {
   Clock,
   MagnifyingGlass,
 } from '@phosphor-icons/react';
+import toast from 'react-hot-toast';
 import { api } from '../../lib/api';
 import { driveApi } from '../../lib/drive';
 
@@ -92,7 +93,9 @@ function FileCardItem({ file }: { file: FileCard }) {
       a.download = filename;
       a.click();
       setTimeout(() => URL.revokeObjectURL(url), 4000);
-    } catch { /* silent */ }
+    } catch {
+      toast.error('Download failed');
+    }
   };
 
   const handleStar = async () => {
@@ -100,7 +103,9 @@ function FileCardItem({ file }: { file: FileCard }) {
       await driveApi.starFile(file.id, !file.starred);
       setActionState('done');
       setTimeout(() => setActionState('idle'), 1500);
-    } catch { /* silent */ }
+    } catch {
+      toast.error('Could not update star');
+    }
   };
 
   return (
@@ -247,13 +252,21 @@ export default function ChatModal() {
   }, []);
 
   useEffect(() => {
-    messagesEndRef.current?.scrollIntoView({ behavior: 'smooth' });
+    const reduce = window.matchMedia('(prefers-reduced-motion: reduce)').matches;
+    messagesEndRef.current?.scrollIntoView({ behavior: reduce ? 'auto' : 'smooth' });
   }, [messages]);
 
   useEffect(() => {
-    if (open) {
-      setTimeout(() => inputRef.current?.focus(), 100);
-    }
+    if (!open) return;
+    const previouslyFocused = document.activeElement as HTMLElement | null;
+    const overflowPrev = document.body.style.overflow;
+    document.body.style.overflow = 'hidden';
+    const t = setTimeout(() => inputRef.current?.focus(), 100);
+    return () => {
+      clearTimeout(t);
+      document.body.style.overflow = overflowPrev;
+      previouslyFocused?.focus?.();
+    };
   }, [open]);
 
   useEffect(() => {

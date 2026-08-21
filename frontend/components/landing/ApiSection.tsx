@@ -40,7 +40,7 @@ export default function ApiSection() {
           </Reveal>
 
           <Reveal delay={0.1}>
-            <div className="code-block" style={{ position: 'relative' }}>
+            <div className="code-block api-code-block" style={{ position: 'relative' }}>
               <div
                 className="eyebrow-pill"
                 style={{
@@ -60,8 +60,7 @@ export default function ApiSection() {
                 </div>
               ))}
               <button
-                className="side-icon"
-                style={{ position: 'absolute', bottom: '0.9rem', right: '0.9rem' }}
+                className="btn-icon api-copy-btn"
                 aria-label="Copy snippet"
                 title="Copy snippet"
                 onClick={() => navigator.clipboard.writeText(SNIPPET)}

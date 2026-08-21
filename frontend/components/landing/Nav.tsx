@@ -1,6 +1,6 @@
 'use client';
 
-import { useState } from 'react';
+import { useEffect, useState } from 'react';
 import Link from 'next/link';
 import { List, X } from '@phosphor-icons/react';
 import { useAuth } from '../../lib/auth';
@@ -15,6 +15,22 @@ const LINKS = [
 export default function Nav() {
   const { user } = useAuth();
   const [open, setOpen] = useState(false);
+
+  // Close the mobile drawer when tapping/scrolling outside it.
+  useEffect(() => {
+    if (!open) return;
+    const onOutside = (e: MouseEvent) => {
+      const menu = document.getElementById('nav-menu');
+      if (menu && !menu.contains(e.target as Node)) setOpen(false);
+    };
+    const close = () => setOpen(false);
+    document.addEventListener('mousedown', onOutside);
+    window.addEventListener('scroll', close, { passive: true });
+    return () => {
+      document.removeEventListener('mousedown', onOutside);
+      window.removeEventListener('scroll', close);
+    };
+  }, [open]);
 
   return (
     <nav className={`nav nav--landing ${open ? 'nav-open' : ''}`}>

@@ -15,6 +15,7 @@ import {
   ArrowsOut,
   DotsThreeVertical,
   Files,
+  WarningCircle,
 } from '@phosphor-icons/react';
 import { FileTypeIcon } from '../FileTypeIcon';
 import { formatBytes, formatDate } from '../../lib/format';
@@ -42,6 +43,8 @@ interface Props {
   loading: boolean;
   search?: string;
   selected: Set<number>;
+  error?: string | null;
+  onRetry?: () => void;
   onToggleSelect: (id: number) => void;
   onToggleSelectAll: () => void;
   onClearSelection: () => void;
@@ -59,6 +62,8 @@ export default function FileGrid({
   loading,
   search,
   selected,
+  error,
+  onRetry,
   onToggleSelect,
   onToggleSelectAll,
   onClearSelection,
@@ -93,6 +98,8 @@ export default function FileGrid({
               <div key={i} className="skeleton" style={{ height: '168px' }} />
             ))}
           </div>
+        ) : error ? (
+          <ErrorState message={error} onRetry={onRetry} />
         ) : folders.length === 0 && files.length === 0 ? (
           <EmptyState mode={mode} q={search} />
         ) : (
@@ -230,6 +237,8 @@ onClick={(e) => {
             <div key={i} className="skeleton" style={{ height: '52px' }} />
           ))}
         </div>
+      ) : error ? (
+        <ErrorState message={error} onRetry={onRetry} />
       ) : folders.length === 0 && files.length === 0 ? (
         <EmptyState mode={mode} q={search} />
       ) : (
@@ -537,6 +546,21 @@ function BulkBar({
       <button className="btn btn-danger btn-sm" onClick={onTrash}>
         <TrashSimple size={14} weight="bold" /> {inTrash ? 'Delete' : 'Trash'}
       </button>
+    </div>
+  );
+}
+
+function ErrorState({ message, onRetry }: { message: string; onRetry?: () => void }) {
+  return (
+    <div className="drive-error-state" role="alert">
+      <WarningCircle size={36} weight="duotone" />
+      <h3>Couldn&apos;t load your files</h3>
+      <p>{message}</p>
+      {onRetry && (
+        <button type="button" className="btn btn-primary btn-sm" onClick={onRetry}>
+          <ArrowClockwise size={14} weight="bold" /> Try again
+        </button>
+      )}
     </div>
   );
 }

@@ -192,6 +192,11 @@ select {
   align-items: center;
 }
 
+/* Touch devices have no hover — keep row actions visible */
+@media (hover: none) {
+  .drive-row-menu { opacity: 1; }
+}
+
 @media (max-width: 900px) {
   .split-grid {
     grid-template-columns: 1fr;
@@ -512,6 +517,8 @@ textarea:focus-visible {
     width: 44px;
     height: 44px;
   }
+.btn-icon:hover:not(:disabled) { color: var(--text); background: var(--surface-2); }
+.btn-icon:active:not(:disabled) { transform: scale(0.94); }
 
   .input {
     min-height: 48px;
@@ -564,7 +571,7 @@ textarea:focus-visible {
   background: var(--surface);
   border: 1px solid var(--border);
   border-radius: var(--r-sm);
-  font-size: 0.95rem;
+  font-size: 1rem;
   transition: border-color 0.18s var(--ease-out), box-shadow 0.18s var(--ease-out),
     background 0.18s var(--ease-out);
 }
@@ -1579,10 +1586,10 @@ textarea:focus-visible {
   animation: checkIn 0.45s var(--ease-out) forwards;
 }
 
-.vault-check:nth-child(1) { animation-delay: 0.55s; }
-.vault-check:nth-child(2) { animation-delay: 0.95s; }
-.vault-check:nth-child(3) { animation-delay: 1.35s; }
-.vault-check:nth-child(4) { animation-delay: 1.75s; }
+.vault-check:nth-child(1) { animation-delay: 0.25s; }
+.vault-check:nth-child(2) { animation-delay: 0.45s; }
+.vault-check:nth-child(3) { animation-delay: 0.65s; }
+.vault-check:nth-child(4) { animation-delay: 0.85s; }
 
 @keyframes checkIn {
   to { opacity: 1; transform: none; }
@@ -1595,10 +1602,10 @@ textarea:focus-visible {
   animation: tagPop 0.35s var(--ease-out) forwards;
 }
 
-.vault-check:nth-child(1) .check-tag { animation-delay: 0.8s; }
-.vault-check:nth-child(2) .check-tag { animation-delay: 1.2s; }
-.vault-check:nth-child(3) .check-tag { animation-delay: 1.6s; }
-.vault-check:nth-child(4) .check-tag { animation-delay: 2s; }
+.vault-check:nth-child(1) .check-tag { animation-delay: 0.45s; }
+.vault-check:nth-child(2) .check-tag { animation-delay: 0.65s; }
+.vault-check:nth-child(3) .check-tag { animation-delay: 0.85s; }
+.vault-check:nth-child(4) .check-tag { animation-delay: 1.05s; }
 
 @keyframes tagPop {
   from { opacity: 0; transform: scale(0.6); }
@@ -2449,6 +2456,8 @@ textarea:focus-visible {
 /* ─── Responsive ─────────────────────────────────────────────────── */
 
 @media (max-width: 900px) {
+  .drive-bulkbar,
+  .drive-drop-hint { position: static; }
   .hero-split { grid-template-columns: 1fr; gap: 3rem; padding-top: 3rem; }
   .guarantee-grid,
   .quote-grid { grid-template-columns: 1fr; }
@@ -2672,6 +2681,9 @@ textarea:focus-visible {
 }
 
 .drive-menu {
+  position: absolute;
+  top: calc(100% + 4px);
+  right: 4px;
   min-width: 178px;
   z-index: var(--z-menu);
   background: var(--surface-2);
@@ -2851,6 +2863,9 @@ textarea:focus-visible {
   cursor: pointer;
   font-family: inherit;
   white-space: nowrap;
+  max-width: 34vw;
+  overflow: hidden;
+  text-overflow: ellipsis;
 }
 
 .drive-crumb-btn:hover {
@@ -3562,7 +3577,7 @@ textarea:focus-visible {
 
   .drive-list-head,
   .drive-list-row {
-    grid-template-columns: 32px minmax(130px, 1fr) 70px 64px 90px;
+    grid-template-columns: 32px minmax(0, 1fr) auto;
   }
 
   .drive-list-head span:nth-child(3),
@@ -3570,6 +3585,11 @@ textarea:focus-visible {
   .drive-list-head span:nth-child(4),
   .drive-list-row > span:nth-child(4) {
     display: none;
+  }
+
+  .drive-list-row .row,
+  .drive-list-row > span:last-child {
+    justify-self: end;
   }
 
   .drive-search-input {
@@ -3633,7 +3653,7 @@ textarea:focus-visible {
   position: fixed;
   bottom: 1.5rem;
   right: 1.5rem;
-  z-index: 9999;
+  z-index: 60;
   width: 52px;
   height: 52px;
   border-radius: 50%;
@@ -3656,7 +3676,7 @@ textarea:focus-visible {
 .ai-backdrop {
   position: fixed;
   inset: 0;
-  z-index: 10000;
+  z-index: 150;
   background: rgba(0, 0, 0, 0.4);
   backdrop-filter: blur(4px);
   animation: ai-fade-in 0.2s ease;
@@ -3669,7 +3689,7 @@ textarea:focus-visible {
   bottom: 0;
   width: 420px;
   max-width: 100vw;
-  z-index: 10001;
+  z-index: 160;
   background: var(--bg, #09090b);
   border-left: 1px solid var(--border, #27272a);
   display: flex;
@@ -4296,4 +4316,102 @@ textarea:focus-visible {
 @media (max-width: 768px) {
   .drive-loading-sidebar { display: none; }
   .skeleton-grid { grid-template-columns: repeat(auto-fill, minmax(140px, 1fr)); }
+}
+
+/* ═══ Pre-launch polish pass ═══════════════════════════════════════ */
+
+/* 100dvh fallbacks for full-height pages (iOS URL-bar jump) */
+@supports (min-height: 100dvh) {
+  .legal-wrap,
+  .settings-wrap,
+  .error-wrap,
+  .drive-loading {
+    min-height: 100dvh;
+  }
+}
+
+/* Safe-area insets for notched devices */
+.ai-fab { bottom: calc(1.5rem + env(safe-area-inset-bottom, 0px)); }
+.upload-queue { bottom: calc(1.5rem + env(safe-area-inset-bottom, 0px)); }
+.ai-input-area { padding-bottom: calc(0.5rem + env(safe-area-inset-bottom, 0px)); }
+/* Reduced motion: no smooth scrolling either */
+@media (prefers-reduced-motion: reduce) {
+  .ai-messages { scroll-behavior: auto !important; }
+}
+
+/* Load-error state (retry panel) */
+.drive-error-state {
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  justify-content: center;
+  gap: 0.5rem;
+  text-align: center;
+  padding: 4rem 1rem;
+  color: var(--text-muted);
+}
+.drive-error-state svg { color: var(--danger); }
+.drive-error-state h3 { color: var(--text); font-size: 1.05rem; }
+.drive-error-state p { font-size: 0.85rem; max-width: 40ch; margin: 0; }
+.drive-error-state .btn { margin-top: 0.5rem; }
+
+/* PreviewModal footer: long mime strings must not push the button out */
+.modal-foot { min-width: 0; }
+.modal-foot .file-meta {
+  min-width: 0;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+
+/* Coarse-pointer touch targets ≥44px for controls missed by the base block */
+@media (hover: none) and (pointer: coarse) {
+  .drive-view-toggle button,
+  .drive-select,
+  .upload-queue-close,
+  .ai-header-btn,
+  .drive-user-btn,
+  .input-icon {
+    min-width: 44px;
+    min-height: 44px;
+  }
+  .ai-send-btn,
+  .ai-file-actions button {
+    width: 40px;
+    height: 40px;
+  }
+  .ai-file-actions button { min-width: 40px; min-height: 40px; }
+  .drive-folder-caret { min-width: 32px; min-height: 40px; }
+  .drive-row-menu { min-width: 36px; min-height: 40px; }
+  .btn-sm { min-height: 44px; }
+  .drive-nav-item { min-height: 44px; }
+}
+
+/* iOS Safari: inputs under 16px trigger page zoom on focus */
+@media (hover: none) and (pointer: coarse), (max-width: 640px) {
+  .drive-search-input,
+  .ai-input,
+  .drive-select select {
+    font-size: 16px;
+  }
+}
+
+/* Compact toolbar at small widths: tighter gaps, icon-led selects */
+@media (max-width: 480px) {
+  .drive-toolbar-row { gap: 0.4rem; }
+  .drive-toolbar-actions { gap: 0.35rem; }
+  .drive-select { padding: 0.3rem 0.45rem; gap: 0.25rem; }
+  .drive-select > span:not(:empty) { max-width: 72px; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+  .drive-user-btn { padding: 0.2rem; }
+}
+
+/* ApiSection copy button: proper hit target, anchored over the code block */
+.api-code-block { padding-bottom: 3.2rem; }
+.api-copy-btn {
+  position: absolute;
+  bottom: 0.75rem;
+  right: 0.75rem;
+  color: var(--text-dim);
+  background: var(--surface-2);
+  border: 1px solid var(--border);
 }
