@@ -114,7 +114,7 @@ export default function FileGrid({
             {files.map((file) => (
               <div
                 key={file.id}
-                className={`file-card ${selected.has(file.id) ? 'selected' : ''}`}
+                className={`file-card ${selected.has(file.id) ? 'selected' : ''} ${menuFor === file.id ? 'has-menu' : ''}`}
               >
                 <div className="file-card-top">
                   <label className="drive-check">
@@ -258,7 +258,7 @@ onClick={(e) => {
           ))}
 
           {files.map((file) => (
-            <div key={file.id} className={`drive-list-row ${selected.has(file.id) ? 'selected' : ''}`}>
+            <div key={file.id} className={`drive-list-row ${selected.has(file.id) ? 'selected' : ''} ${menuFor === file.id ? 'has-menu' : ''}`}>
               <label className="drive-check" onClick={(e) => e.stopPropagation()}>
                 <input
                   type="checkbox"

@@ -275,13 +275,13 @@ export default function DashboardPage() {
             await driveApi.trashFile(file.id);
             toast.success('Moved to trash');
             refreshStats();
-            reload(1, 'trash');
+            reload(1, mode);
             break;
           case 'restore':
             await driveApi.restoreFile(file.id);
             toast.success('File restored');
             refreshStats();
-            reload(1, 'all');
+            reload(1, mode);
             break;
           case 'delete':
             setDialog({ kind: 'confirmDelete', file });
@@ -330,12 +330,12 @@ export default function DashboardPage() {
         toast.success('Folder moved to trash');
         refreshFolders();
         refreshStats();
-        reload(1, 'trash');
+        reload(1, mode);
       } catch (err: any) {
         toast.error(err.message || 'Action failed');
       }
     },
-    [refreshFolders, refreshStats, reload]
+    [refreshFolders, refreshStats, reload, mode]
   );
 
   const restoreFolder = useCallback(
@@ -345,12 +345,12 @@ export default function DashboardPage() {
         toast.success('Folder restored');
         refreshFolders();
         refreshStats();
-        reload(1, 'all');
+        reload(1, mode);
       } catch (err: any) {
         toast.error(err.message || 'Action failed');
       }
     },
-    [refreshFolders, refreshStats, reload]
+    [refreshFolders, refreshStats, reload, mode]
   );
 
   const confirmDelete = useCallback(

@@ -680,6 +680,8 @@ textarea:focus-visible {
   flex-direction: column;
   gap: 0.75rem;
   min-width: 0;
+  position: relative;
+  z-index: 1;
   transition: border-color 0.18s var(--ease-out), transform 0.18s var(--ease-out),
     background 0.18s var(--ease-out);
 }
@@ -688,6 +690,14 @@ textarea:focus-visible {
   border-color: var(--border-strong);
   background: var(--surface-2);
   transform: translateY(-2px);
+}
+
+.file-card.has-menu {
+  z-index: 20;
+}
+
+.file-card.has-menu:hover {
+  transform: none;
 }
 
 @media (hover: none) {
@@ -2511,8 +2521,10 @@ textarea:focus-visible {
 }
 
 .file-card .drive-menu {
-  right: 0.5rem;
+  right: 0;
   top: auto;
+  bottom: 100%;
+  margin-bottom: 6px;
 }
 
 /* ── List view ────────────────────────────────────────────────────── */
@@ -2547,6 +2559,12 @@ textarea:focus-visible {
 .drive-list-row {
   border-bottom: 1px solid var(--border);
   transition: background 0.12s var(--ease-out);
+  position: relative;
+  z-index: 1;
+}
+
+.drive-list-row.has-menu {
+  z-index: 20;
 }
 
 .drive-list-row:last-child {
