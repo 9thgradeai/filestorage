@@ -85,7 +85,7 @@ describe('File Controller', () => {
         .field('public', 'false')
         .expect(StatusCodes.BAD_REQUEST);
 
-      expect(res.body.message).toContain('Invalid file type');
+      expect(res.body.message).toContain('not allowed');
     });
 
     it('should reject unauthenticated request', async () => {

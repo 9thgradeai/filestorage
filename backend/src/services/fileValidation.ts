@@ -1,29 +1,20 @@
-import { Readable } from 'stream';
 import fs from 'fs';
 import { filetypeinfo } from 'magic-bytes.js';
 
-// Allowed MIME types for uploads (OWASP secure file upload practices)
-const ALLOWED_MIME_TYPES = [
-  'image/jpeg',
-  'image/png',
-  'image/gif',
-  'image/webp',
-  'application/pdf',
-  'application/msword',
-  'application/vnd.openxmlformats-officedocument.wordprocessingml.document',
-  'application/vnd.ms-excel',
-  'application/vnd.openxmlformats-officedocument.spreadsheetml.sheet',
-  'application/vnd.ms-powerpoint',
-  'application/vnd.openxmlformats-officedocument.presentationml.presentation',
-  'text/plain',
-  'text/csv',
-  'application/zip',
-  'application/gzip',
-  'application/x-tar',
-];
-
 // Maximum file size: 100MB by default (configurable via MAX_FILE_SIZE env).
 const MAX_FILE_SIZE = parseInt(process.env.MAX_FILE_SIZE || '104857600', 10);
+
+// Only native executables and server-side scripts are blocked — every other
+// file type (video, audio, design, data, code, archives, …) uploads freely.
+// Serving is safe regardless: downloads are forced to Content-Disposition:
+// attachment with X-Content-Type-Options: nosniff and unknown types are
+// rewritten to application/octet-stream, so nothing can execute in-browser.
+const BLOCKED_EXTENSIONS = new Set([
+  // Windows executables / installers / scripts
+  '.exe', '.dll', '.bat', '.cmd', '.com', '.scr', '.msi', '.vbs', '.ps1',
+  // Server-side scripts (dangerous if storage were ever served directly)
+  '.php', '.jsp', '.asp', '.aspx', '.cgi',
+]);
 
 export const formatSizeLabel = (bytes: number): string =>
   bytes >= 1024 * 1024
@@ -33,10 +24,13 @@ export const formatSizeLabel = (bytes: number): string =>
 interface ValidationResult {
   isValid: boolean;
   error?: string;
+  // MIME type refined via magic-byte detection; falls back to the declared
+  // browser type, then application/octet-stream. Store this value.
+  resolvedMime?: string;
 }
 
 // Detect the real MIME type from raw bytes using magic-byte signatures. Returns
-// null when the content has no detectable signature.
+// null when the content has no detectable signature (plain text, json, csv…).
 const detectMime = (buffer: Buffer): string | null => {
   try {
     const matches = filetypeinfo(buffer);
@@ -71,6 +65,11 @@ const detectContentType = async (source: Buffer | string): Promise<string | null
   }
 };
 
+const getExtension = (filename: string): string => {
+  const idx = filename.lastIndexOf('.');
+  return idx === -1 ? '' : filename.slice(idx).toLowerCase();
+};
+
 export const validateUpload = async (
   filename: string,
   size: number,
@@ -102,69 +101,42 @@ export const validateUpload = async (
     };
   }
 
-  // Validate MIME type
-  if (!ALLOWED_MIME_TYPES.includes(mimeType)) {
+  // Block executables / server scripts by extension (final extension wins).
+  const ext = getExtension(filename);
+  if (ext && BLOCKED_EXTENSIONS.has(ext)) {
     return {
       isValid: false,
-      error: `Invalid file type "${mimeType}" is not allowed`,
+      error: `File type "${ext}" is not allowed for security reasons`,
     };
   }
 
-  // Validate content type using magic-byte detection
-  const detectedType = await detectContentType(source);
-  if (detectedType && !ALLOWED_MIME_TYPES.includes(detectedType)) {
-    return {
-      isValid: false,
-      error: `File content type "${detectedType}" does not match declared type`,
-    };
+  // Magic bytes are used to refine the stored MIME, never to reject: many
+  // formats have overlapping signatures (docx ≡ zip) or none at all (text).
+  let resolvedMime =
+    mimeType && mimeType !== 'application/octet-stream' ? mimeType : '';
+  if (!resolvedMime) {
+    const detectedType = await detectContentType(source);
+    if (detectedType) resolvedMime = detectedType;
   }
 
-  return { isValid: true };
+  return { isValid: true, resolvedMime: resolvedMime || 'application/octet-stream' };
 };
 
-// Helper to check if a MIME type is valid for a given extension (OWASP recommendation)
+// Kept for API compatibility: an extension is allowed unless explicitly blocked.
 export const isAllowedExtension = (filename: string): boolean => {
-  const validExtensions = [
-    '.jpg', '.jpeg', '.png', '.gif', '.webp',
-    '.pdf', '.doc', '.docx', '.xls', '.xlsx', '.ppt', '.pptx',
-    '.txt', '.csv', '.zip', '.gz', '.tar',
-  ];
-
-  const ext = filename.substring(filename.lastIndexOf('.')).toLowerCase();
-  return validExtensions.includes(ext);
+  const ext = getExtension(filename);
+  return !ext || !BLOCKED_EXTENSIONS.has(ext);
 };
 
-// Read the first chunk of a stream without consuming the rest.
-const readFirstChunk = (stream: Readable): Promise<Buffer> =>
-  new Promise((resolve, reject) => {
-    const onData = (chunk: Buffer) => {
-      stream.removeListener('data', onData);
-      stream.unshift(chunk);
-      resolve(chunk);
-    };
-    stream.once('data', onData);
-    stream.once('error', reject);
-  });
-
-// Stream-based validation for large files
-export const validateStream = async (stream: Readable, filename: string): Promise<ValidationResult> => {
-  if (!isAllowedExtension(filename)) {
-    return {
-      isValid: false,
-      error: 'File extension not allowed',
-    };
-  }
-
-  // Basic check on first chunk
-  const firstChunk = await readFirstChunk(stream);
-  const detectedType = detectMime(firstChunk);
-  if (detectedType && !ALLOWED_MIME_TYPES.includes(detectedType)) {
-    return {
-      isValid: false,
-      error: `File content type "${detectedType}" is not allowed`,
-    };
-  }
-
+// Stream-based validation for large files (header-only read).
+export const validateStream = async (
+  stream: NodeJS.ReadableStream,
+  _filename: string
+): Promise<ValidationResult> => {
+  void _filename;
+  // Nothing to reject at stream level anymore — size and filename checks run
+  // before streaming, and content detection cannot fail an upload.
+  void stream;
   return { isValid: true };
 };
 

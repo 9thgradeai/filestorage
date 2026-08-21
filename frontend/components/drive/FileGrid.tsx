@@ -397,16 +397,48 @@ function FileContextMenu({
         onClose();
       }
     };
-    const handleEsc = (e: KeyboardEvent) => {
-      if (e.key === 'Escape') onClose();
+    const handleKey = (e: KeyboardEvent) => {
+      if (e.key === 'Escape') {
+        onClose();
+        return;
+      }
+      // Roving-focus arrow navigation between menu items.
+      if (!menuRef.current) return;
+      const items = Array.from(
+        menuRef.current.querySelectorAll<HTMLButtonElement>('button[role="menuitem"]')
+      ).filter((el) => !el.hasAttribute('disabled'));
+      if (items.length === 0) return;
+      const current = document.activeElement as HTMLButtonElement | null;
+      let idx = items.indexOf(current as HTMLButtonElement);
+      if (e.key === 'ArrowDown') {
+        e.preventDefault();
+        idx = idx < 0 ? 0 : Math.min(idx + 1, items.length - 1);
+        items[idx].focus();
+      } else if (e.key === 'ArrowUp') {
+        e.preventDefault();
+        idx = idx < 0 ? items.length - 1 : Math.max(idx - 1, 0);
+        items[idx].focus();
+      } else if (e.key === 'Home') {
+        e.preventDefault();
+        items[0].focus();
+      } else if (e.key === 'End') {
+        e.preventDefault();
+        items[items.length - 1].focus();
+      }
     };
     document.addEventListener('mousedown', handleOutsideClick);
-    document.addEventListener('keydown', handleEsc);
+    document.addEventListener('keydown', handleKey);
     return () => {
       document.removeEventListener('mousedown', handleOutsideClick);
-      document.removeEventListener('keydown', handleEsc);
+      document.removeEventListener('keydown', handleKey);
     };
   }, [onClose]);
+
+  // Focus the first menu item on open so keyboard users land inside the menu.
+  useEffect(() => {
+    const first = menuRef.current?.querySelector<HTMLButtonElement>('button[role="menuitem"]');
+    first?.focus();
+  }, []);
 
   const menu = (
     <>

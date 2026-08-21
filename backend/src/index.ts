@@ -20,6 +20,10 @@ validateEnv();
 
 const app = express();
 
+// Behind a single reverse proxy (Railway/Vercel). Lets express-rate-limit see
+// real client IPs from X-Forwarded-For instead of warning about spoofing.
+app.set('trust proxy', 1);
+
 // Structured request logging (access logs) — runs first, before routing.
 app.use(httpLogger);
 

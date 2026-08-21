@@ -64,13 +64,15 @@ export const uploadFile = async (req: Request, res: Response) => {
   }
 
   try {
-    // Validate file (size, filename, extension + magic bytes) BEFORE uploading.
+    // Validate file (size, filename, extension blocklist) BEFORE uploading.
+    // resolvedMime refines the browser-declared type via magic bytes.
     const validationResult = await validateUpload(originalname, size, filePath, mimetype);
     if (!validationResult.isValid) {
       return res.status(StatusCodes.BAD_REQUEST).json({
         message: validationResult.error || 'File validation failed',
       });
     }
+    const finalMime = validationResult.resolvedMime || mimetype;
 
     // Folder ownership + quota checks happen before anything hits storage.
     if (parentId !== null) {
@@ -98,7 +100,7 @@ export const uploadFile = async (req: Request, res: Response) => {
 
     // Stream from disk to storage (S3 or local) — no full-file buffering.
     const stream = fs.createReadStream(filePath);
-    await storageUpload(s3Key, stream, mimetype);
+    await storageUpload(s3Key, stream, finalMime);
 
     try {
       // Persist metadata after the object exists in storage.
@@ -108,7 +110,7 @@ export const uploadFile = async (req: Request, res: Response) => {
         stored_filename: storedFilename,
         s3_key: s3Key,
         file_size: size,
-        mime_type: mimetype,
+        mime_type: finalMime,
         is_public: false,
         parent_id: parentId,
       });

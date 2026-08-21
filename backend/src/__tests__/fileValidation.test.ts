@@ -7,22 +7,15 @@ import {
   MAX_FILE_SIZE,
 } from '../services/fileValidation';
 
-const PNG_HEADER = Buffer.concat([
-  Buffer.from('89504e470d0a1a0a', 'hex'),
-  Buffer.alloc(32),
+const PNG_HEADER = Buffer.from([
+  0x89, 0x50, 0x4e, 0x47, 0x0d, 0x0a, 0x1a, 0x0a, 0x00, 0x00, 0x00, 0x0d, 0x49, 0x48, 0x44, 0x52,
 ]);
-const TEXT = Buffer.from('plain text content');
-
-function fakeMp4Header(): Buffer {
-  const buf = Buffer.alloc(1024);
-  buf.writeUInt32BE(1024, 0);
-  buf.write('ftyp', 4, 'latin1');
-  buf.write('mp42', 8, 'latin1');
-  buf.writeUInt32BE(0, 12);
-  buf.write('isom', 16, 'latin1');
-  buf.write('avc1', 20, 'latin1');
-  return buf;
-}
+const MP4_HEADER = Buffer.concat([
+  Buffer.from([0x00, 0x00, 0x00, 0x18, 0x66, 0x74, 0x79, 0x70]), // ftyp box
+  Buffer.from('mp42', 'utf-8'),
+  Buffer.alloc(200),
+]);
+const TEXT = Buffer.from('hello world', 'utf-8');
 
 describe('fileValidation', () => {
   describe('validateFileContent', () => {
@@ -65,48 +58,85 @@ describe('fileValidation', () => {
       }
     });
 
-    it('rejects disallowed mime types', async () => {
-      const result = await validateUpload('script.exe', 10, TEXT, 'application/x-msdownload');
-      expect(result.isValid).toBe(false);
-      expect(result.error).toContain('Invalid file type');
+    it('accepts every media type: video, audio, design, data, code', async () => {
+      const cases: [string, string][] = [
+        ['movie.mp4', 'video/mp4'],
+        ['song.flac', 'audio/flac'],
+        ['clip.mov', 'video/quicktime'],
+        ['design.sketch', 'application/octet-stream'],
+        ['photo.heic', 'image/heic'],
+        ['notes.md', 'text/markdown'],
+        ['data.json', 'application/json'],
+        ['app.py', 'text/x-python'],
+        ['archive.7z', 'application/x-7z-compressed'],
+        ['disk.iso', 'application/octet-stream'],
+        ['font.ttf', 'font/ttf'],
+        ['vector.svg', 'image/svg+xml'],
+        ['noext', 'application/octet-stream'],
+      ];
+      for (const [name, mime] of cases) {
+        const result = await validateUpload(name, 1024, TEXT, mime);
+        expect(result.isValid).toBe(true);
+      }
     });
 
-    it('rejects content whose detected type is not allowed', async () => {
-      const result = await validateUpload('note.txt', 1024, fakeMp4Header(), 'text/plain');
-      expect(result.isValid).toBe(false);
-      expect(result.error).toContain('video/mp4');
+    it('still rejects executables and server scripts by extension', async () => {
+      for (const bad of ['virus.exe', 'trojan.bat', 'shell.php', 'backdoor.jsp', 'macro.msi']) {
+        const result = await validateUpload(bad, 10, TEXT, 'application/octet-stream');
+        expect(result.isValid).toBe(false);
+        expect(result.error).toContain('not allowed');
+      }
+    });
+
+    it('accepts mp4 magic bytes even when named .txt (detection refines, never rejects)', async () => {
+      const result = await validateUpload('note.txt', 1024, MP4_HEADER, 'text/plain');
+      expect(result.isValid).toBe(true);
+      // Declared type kept when specific.
+      expect(result.resolvedMime).toBe('text/plain');
+    });
+
+    it('refines generic octet-stream declarations using detected type', async () => {
+      const result = await validateUpload('photo.bin', 1024, PNG_HEADER, 'application/octet-stream');
+      expect(result.isValid).toBe(true);
+      expect(result.resolvedMime).toBe('image/png');
+    });
+
+    it('keeps declared type over detection when declared is specific (docx ≡ zip)', async () => {
+      const zipMagic = Buffer.from([0x50, 0x4b, 0x03, 0x04, 0x14, 0x00, 0x06, 0x00]);
+      const result = await validateUpload('report.docx', 1024, zipMagic, 'application/vnd.openxmlformats-officedocument.wordprocessingml.document');
+      expect(result.isValid).toBe(true);
+      expect(result.resolvedMime).toBe('application/vnd.openxmlformats-officedocument.wordprocessingml.document');
+    });
+
+    it('falls back to application/octet-stream when nothing is detectable', async () => {
+      const result = await validateUpload('mystery', 10, TEXT, '');
+      expect(result.isValid).toBe(true);
+      expect(result.resolvedMime).toBe('application/octet-stream');
     });
 
     it('accepts a valid matching upload', async () => {
       const result = await validateUpload('photo.png', 1024, PNG_HEADER, 'image/png');
       expect(result.isValid).toBe(true);
+      expect(result.resolvedMime).toBe('image/png');
     });
   });
 
   describe('isAllowedExtension', () => {
-    it('allows whitelisted extensions', () => {
+    it('allows common and unknown extensions', () => {
       expect(isAllowedExtension('report.pdf')).toBe(true);
       expect(isAllowedExtension('IMG_001.JPG')).toBe(true);
+      expect(isAllowedExtension('movie.mp4')).toBe(true);
+      expect(isAllowedExtension('noext')).toBe(true);
     });
 
-    it('rejects unknown or missing extensions', () => {
+    it('blocks executables and server scripts', () => {
       expect(isAllowedExtension('virus.exe')).toBe(false);
-      expect(isAllowedExtension('noext')).toBe(false);
+      expect(isAllowedExtension('shell.php')).toBe(false);
     });
   });
 
   describe('validateStream', () => {
-    it('rejects disallowed extensions', async () => {
-      const result = await validateStream(Readable.from([TEXT]), 'virus.exe');
-      expect(result.isValid).toBe(false);
-    });
-
-    it('rejects streams with a detected disallowed type', async () => {
-      const result = await validateStream(Readable.from([fakeMp4Header()]), 'note.txt');
-      expect(result.isValid).toBe(false);
-    });
-
-    it('accepts allowed text streams with no detectable magic', async () => {
+    it('accepts any stream (size/filename checks run before streaming)', async () => {
       const result = await validateStream(Readable.from([TEXT]), 'note.txt');
       expect(result.isValid).toBe(true);
     });
