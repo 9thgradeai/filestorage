@@ -2120,9 +2120,6 @@ textarea:focus-visible {
 }
 
 .drive-menu {
-  position: absolute;
-  right: 0;
-  top: 110%;
   min-width: 178px;
   z-index: var(--z-menu);
   background: var(--surface-2);
@@ -2520,12 +2517,18 @@ textarea:focus-visible {
   color: var(--accent-strong);
 }
 
-.file-card .drive-menu {
-  right: 0;
-  top: auto;
-  bottom: 100%;
-  margin-bottom: 6px;
+.drive-menu-portal {
+  position: fixed;
 }
+
+.drive-menu-backdrop {
+  position: fixed;
+  inset: 0;
+  z-index: calc(var(--z-menu) - 1);
+  background: rgba(0, 0, 0, 0.3);
+}
+
+/* Mobile: convert context menu to bottom sheet */
 
 /* ── List view ────────────────────────────────────────────────────── */
 
@@ -2619,12 +2622,6 @@ textarea:focus-visible {
   align-items: center;
   gap: 0.15rem;
   justify-content: flex-end;
-  position: relative;
-}
-
-.drive-list-actions .drive-menu {
-  right: 0;
-  top: 110%;
 }
 
 .folder-row .drive-list-name {
@@ -3045,6 +3042,32 @@ textarea:focus-visible {
 
   .modal-preview {
     width: 100%;
+  }
+
+  /* Context menu → bottom sheet on mobile */
+  .drive-menu-portal {
+    position: fixed !important;
+    top: auto !important;
+    left: 0 !important;
+    right: 0 !important;
+    bottom: 0 !important;
+    width: 100% !important;
+    min-width: 0 !important;
+    border-radius: var(--r-md) var(--r-md) 0 0;
+    padding: 0.5rem 0.3rem calc(env(safe-area-inset-bottom, 0px) + 0.5rem);
+    max-height: 70vh;
+    overflow-y: auto;
+    animation: sheet-in 0.2s var(--ease-out);
+  }
+
+  .drive-menu-portal button {
+    padding: 0.7rem 0.8rem;
+    font-size: 0.95rem;
+  }
+
+  @keyframes sheet-in {
+    from { transform: translateY(100%); }
+    to { transform: translateY(0); }
   }
 }
 /* ═══ AI Chat Panel ═══════════════════════════════════════════════════════ */

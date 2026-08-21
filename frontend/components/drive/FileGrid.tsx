@@ -1,6 +1,7 @@
 'use client';
 
-import { useState, useRef, useEffect } from 'react';
+import { useState, useRef, useEffect, useCallback } from 'react';
+import { createPortal } from 'react-dom';
 import {
   Folder as FolderIcon,
   DownloadSimple,
@@ -67,6 +68,7 @@ export default function FileGrid({
   onBulkAction,
 }: Props) {
   const [menuFor, setMenuFor] = useState<number | null>(null);
+  const [menuAnchor, setMenuAnchor] = useState<DOMRect | null>(null);
   const inTrash = mode === 'trash';
   const anySelected = selected.size > 0;
 
@@ -174,19 +176,27 @@ export default function FileGrid({
                     className="btn btn-secondary btn-sm"
 onClick={(e) => {
                       e.stopPropagation();
-                      setMenuFor(menuFor === file.id ? null : file.id);
+                      if (menuFor === file.id) {
+                        setMenuFor(null);
+                        setMenuAnchor(null);
+                      } else {
+                        const rect = (e.currentTarget as HTMLElement).getBoundingClientRect();
+                        setMenuFor(file.id);
+                        setMenuAnchor(rect);
+                      }
                     }}
                     aria-label="More actions"
                     title="More actions"
                   >
                     <DotsThreeVertical size={15} weight="bold" />
                   </button>
-                  {menuFor === file.id && (
+                  {menuFor === file.id && menuAnchor && (
                     <FileContextMenu
                       file={file}
                       inTrash={inTrash}
+                      anchor={menuAnchor}
                       onFileAction={onFileAction}
-                      onClose={() => setMenuFor(null)}
+                      onClose={() => { setMenuFor(null); setMenuAnchor(null); }}
                     />
                   )}
                 </div>
@@ -305,17 +315,25 @@ onClick={(e) => {
                   aria-label="More actions"
                   onClick={(e) => {
                       e.stopPropagation();
-                      setMenuFor(menuFor === file.id ? null : file.id);
+                      if (menuFor === file.id) {
+                        setMenuFor(null);
+                        setMenuAnchor(null);
+                      } else {
+                        const rect = (e.currentTarget as HTMLElement).getBoundingClientRect();
+                        setMenuFor(file.id);
+                        setMenuAnchor(rect);
+                      }
                     }}
                 >
                   <DotsThreeVertical size={15} weight="bold" />
                 </button>
-                {menuFor === file.id && (
+                {menuFor === file.id && menuAnchor && (
                   <FileContextMenu
                     file={file}
                     inTrash={inTrash}
+                    anchor={menuAnchor}
                     onFileAction={onFileAction}
-                    onClose={() => setMenuFor(null)}
+                    onClose={() => { setMenuFor(null); setMenuAnchor(null); }}
                   />
                 )}
               </span>
@@ -330,15 +348,48 @@ onClick={(e) => {
 function FileContextMenu({
   file,
   inTrash,
+  anchor,
   onFileAction,
   onClose,
 }: {
   file: DriveFile;
   inTrash: boolean;
+  anchor: DOMRect;
   onFileAction: (action: FileAction, file: DriveFile) => void;
   onClose: () => void;
 }) {
   const menuRef = useRef<HTMLDivElement>(null);
+  const [pos, setPos] = useState<{ top: number; left: number }>({ top: 0, left: 0 });
+
+  const calcPosition = useCallback(() => {
+    const vw = window.innerWidth;
+    const vh = window.innerHeight;
+    const menuW = 200;
+    const menuH = inTrash ? 100 : 340;
+    const gap = 6;
+
+    let left = anchor.right - menuW;
+    let top = anchor.bottom + gap;
+
+    // If menu would go below viewport, open upward
+    if (top + menuH > vh) {
+      top = anchor.top - menuH - gap;
+    }
+    // If still off-screen, clamp to viewport
+    if (top < gap) top = gap;
+
+    // Horizontal: keep within viewport
+    if (left < gap) left = gap;
+    if (left + menuW > vw - gap) left = vw - menuW - gap;
+
+    setPos({ top, left });
+  }, [anchor, inTrash]);
+
+  useEffect(() => {
+    calcPosition();
+    window.addEventListener('resize', calcPosition);
+    return () => window.removeEventListener('resize', calcPosition);
+  }, [calcPosition]);
 
   useEffect(() => {
     const handleOutsideClick = (e: MouseEvent) => {
@@ -346,59 +397,77 @@ function FileContextMenu({
         onClose();
       }
     };
-    document.addEventListener('click', handleOutsideClick);
-    return () => document.removeEventListener('click', handleOutsideClick);
+    const handleEsc = (e: KeyboardEvent) => {
+      if (e.key === 'Escape') onClose();
+    };
+    document.addEventListener('mousedown', handleOutsideClick);
+    document.addEventListener('keydown', handleEsc);
+    return () => {
+      document.removeEventListener('mousedown', handleOutsideClick);
+      document.removeEventListener('keydown', handleEsc);
+    };
   }, [onClose]);
 
-  if (inTrash) {
-    return (
-      <div className="drive-menu" onClick={(e) => e.stopPropagation()} ref={menuRef}>
-        <button onClick={() => { onFileAction('restore', file); onClose(); }}>
-          <ArrowClockwise size={14} weight="bold" /> Restore
-        </button>
-        <button className="danger" onClick={() => { onFileAction('delete', file); onClose(); }}>
-          <TrashSimple size={14} weight="bold" /> Delete forever
-        </button>
-      </div>
-    );
-  }
-
-  return (
-    <div className="drive-menu" onClick={(e) => e.stopPropagation()} ref={menuRef}>
-      <button onClick={() => { onFileAction('preview', file); onClose(); }}>
-        <Eye size={14} weight="bold" /> Preview
-      </button>
-      <button onClick={() => { onFileAction('download', file); onClose(); }}>
-        <DownloadSimple size={14} weight="bold" /> Download
-      </button>
-      <button onClick={() => { onFileAction('rename', file); onClose(); }}>
-        <PencilSimple size={14} weight="bold" /> Rename
-      </button>
-      <button onClick={() => { onFileAction('move', file); onClose(); }}>
-        <ArrowsOut size={14} weight="bold" /> Move
-      </button>
-      <button onClick={() => { onFileAction(file.starred ? 'unstar' : 'star', file); onClose(); }}>
-        <Star size={14} weight={file.starred ? 'fill' : 'bold'} /> {file.starred ? 'Unstar' : 'Star'}
-      </button>
-      {file.is_public ? (
-        <button onClick={() => { onFileAction('share', file); onClose(); }}>
-          <LinkSimple size={14} weight="bold" /> Copy link
-        </button>
+  const menu = (
+    <>
+      <div className="drive-menu-backdrop" onClick={onClose} />
+      <div
+        className="drive-menu drive-menu-portal"
+        onClick={(e) => e.stopPropagation()}
+        ref={menuRef}
+        style={{ position: 'fixed', top: pos.top, left: pos.left }}
+      >
+      {inTrash ? (
+        <>
+          <button onClick={() => { onFileAction('restore', file); onClose(); }}>
+            <ArrowClockwise size={14} weight="bold" /> Restore
+          </button>
+          <button className="danger" onClick={() => { onFileAction('delete', file); onClose(); }}>
+            <TrashSimple size={14} weight="bold" /> Delete forever
+          </button>
+        </>
       ) : (
-        <button onClick={() => { onFileAction('makePublic', file); onClose(); }}>
-          <LinkSimple size={14} weight="bold" /> Make public
-        </button>
+        <>
+          <button onClick={() => { onFileAction('preview', file); onClose(); }}>
+            <Eye size={14} weight="bold" /> Preview
+          </button>
+          <button onClick={() => { onFileAction('download', file); onClose(); }}>
+            <DownloadSimple size={14} weight="bold" /> Download
+          </button>
+          <button onClick={() => { onFileAction('rename', file); onClose(); }}>
+            <PencilSimple size={14} weight="bold" /> Rename
+          </button>
+          <button onClick={() => { onFileAction('move', file); onClose(); }}>
+            <ArrowsOut size={14} weight="bold" /> Move
+          </button>
+          <button onClick={() => { onFileAction(file.starred ? 'unstar' : 'star', file); onClose(); }}>
+            <Star size={14} weight={file.starred ? 'fill' : 'bold'} /> {file.starred ? 'Unstar' : 'Star'}
+          </button>
+          {file.is_public ? (
+            <button onClick={() => { onFileAction('share', file); onClose(); }}>
+              <LinkSimple size={14} weight="bold" /> Copy link
+            </button>
+          ) : (
+            <button onClick={() => { onFileAction('makePublic', file); onClose(); }}>
+              <LinkSimple size={14} weight="bold" /> Make public
+            </button>
+          )}
+          {file.is_public && (
+            <button onClick={() => { onFileAction('makePrivate', file); onClose(); }}>
+              <EyeSlash size={14} weight="bold" /> Make private
+            </button>
+          )}
+          <button className="danger" onClick={() => { onFileAction('trash', file); onClose(); }}>
+            <TrashSimple size={14} weight="bold" /> Move to trash
+          </button>
+        </>
       )}
-      {file.is_public && (
-        <button onClick={() => { onFileAction('makePrivate', file); onClose(); }}>
-          <EyeSlash size={14} weight="bold" /> Make private
-        </button>
-      )}
-      <button className="danger" onClick={() => { onFileAction('trash', file); onClose(); }}>
-        <TrashSimple size={14} weight="bold" /> Move to trash
-      </button>
-    </div>
+      </div>
+    </>
   );
+
+  if (typeof document === 'undefined') return null;
+  return createPortal(menu, document.body);
 }
 
 function BulkBar({
