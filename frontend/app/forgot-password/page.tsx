@@ -13,6 +13,7 @@ import {
   LockKey,
 } from '@phosphor-icons/react';
 import { useAuth } from '../../lib/auth';
+import { isValidEmail, passwordIssue } from '../../lib/validate';
 import { Brand } from '../../components/Brand';
 
 type Step = 'email' | 'reset' | 'done';
@@ -55,6 +56,8 @@ export default function ForgotPasswordPage() {
     e.preventDefault();
     setError('');
     setInfo('');
+    if (!email.trim()) return setError('Email is required');
+    if (!isValidEmail(email)) return setError('Enter a valid email address');
     setBusy(true);
     try {
       await forgotPassword(email);
@@ -69,6 +72,10 @@ export default function ForgotPasswordPage() {
   const handleReset = async (e: React.FormEvent) => {
     e.preventDefault();
     setError('');
+    if (!otp.trim()) return setError('Reset code is required');
+    if (!/^\d{6}$/.test(otp.trim())) return setError('The code is 6 digits');
+    const pwIssue = passwordIssue(password);
+    if (pwIssue) return setError(pwIssue);
     if (password !== confirmPassword) {
       setError('Passwords do not match');
       return;

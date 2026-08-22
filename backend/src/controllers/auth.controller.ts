@@ -16,6 +16,8 @@ import {
 import { logger } from '../config/logger';
 import { RefreshTokenModel } from '../models/refreshToken.model';
 import { UserModel, toPublicUser } from '../models/user.model';
+import { FileModel } from '../models/file.model';
+import { safeStorageDelete } from '../services/storage.service';
 import { sendOtpEmailAsync } from '../services/email.service';
 import {
   issueOtp,
@@ -45,21 +47,26 @@ export const register = async (req: Request, res: Response) => {
 
   try {
     const existing = await UserModel.findByEmail(email);
-    if (existing) {
-      return res.status(409).json({ message: 'An account with this email already exists' });
+
+    // Uniform response across all three cases (new account / unverified
+    // duplicate / verified duplicate) so registration can't be used to probe
+    // which emails exist. Unverified duplicates get a fresh OTP — same thing
+    // resend-otp already does; verified duplicates get no email at all.
+    if (!existing) {
+      const rounds = parseInt(process.env.BCRYPT_ROUNDS || '12', 10);
+      const hashedPassword = await bcrypt.hash(password, rounds);
+      const user = await UserModel.create({ name, email, passwordHash: hashedPassword });
+
+      const code = await issueOtp(user.email, 'email_verification');
+      sendOtpEmailAsync(user.email, 'email_verification', code, OTP_TTL_MINUTES);
+    } else if (!existing.email_verified_at) {
+      const code = await issueOtp(existing.email, 'email_verification');
+      sendOtpEmailAsync(existing.email, 'email_verification', code, OTP_TTL_MINUTES);
     }
 
-    const rounds = parseInt(process.env.BCRYPT_ROUNDS || '12', 10);
-    const hashedPassword = await bcrypt.hash(password, rounds);
-    const user = await UserModel.create({ name, email, passwordHash: hashedPassword });
-
-    const code = await issueOtp(user.email, 'email_verification');
-    sendOtpEmailAsync(user.email, 'email_verification', code, OTP_TTL_MINUTES);
-
-    res.status(201).json({
+    res.status(200).json({
       message:
-        'Account created. We sent a 6-digit verification code to your email — enter it to activate your account.',
-      email: user.email,
+        'If this email is not registered yet, we have created your account and sent a 6-digit verification code. If it is already registered and verified, try signing in instead.',
     });
   } catch (err) {
     logger.error({ err: err }, 'Registration error:');
@@ -86,12 +93,13 @@ export const verifyEmail = async (req: Request, res: Response) => {
 
     const updated = await UserModel.markEmailVerified(email);
     if (!updated) {
-      return res.status(400).json({ message: 'Account not found for this email' });
+      // Same message as the failed-OTP branch — no account-existence signal.
+      return res.status(400).json({ message: 'Invalid or expired verification code' });
     }
 
     const user = await UserModel.findByEmail(email);
     if (!user) {
-      return res.status(400).json({ message: 'Account not found for this email' });
+      return res.status(400).json({ message: 'Invalid or expired verification code' });
     }
 
     const accessToken = signAccessToken(user.id);
@@ -181,7 +189,8 @@ export const resetPassword = async (req: Request, res: Response) => {
 
     const updated = await UserModel.updatePasswordHash(email, hashedPassword);
     if (!updated) {
-      return res.status(400).json({ message: 'Account not found for this email' });
+      // Same message as the failed-OTP branch — no account-existence signal.
+      return res.status(400).json({ message: 'Invalid or expired reset code' });
     }
 
     // Account becomes verified on reset (proves email ownership) and every
@@ -412,11 +421,25 @@ export const deleteAccount = async (req: Request, res: Response) => {
     const isMatch = await bcrypt.compare(password, user.password_hash);
     if (!isMatch) return res.status(400).json({ message: 'Password is incorrect' });
 
+    // Collect every storage key while the file rows still exist — the user
+    // delete below cascades and would leave the objects unreachable.
+    const storageKeys = await FileModel.listAllStorageKeys(userId);
+
     // Revoke all sessions
     await RefreshTokenModel.revokeAllForUser(userId);
 
     // Delete the account (cascading deletes handle files/folders)
     await UserModel.deleteAccount(userId);
+
+    // Purge stored objects best-effort. Rows are already gone, so failures
+    // are logged loudly for reconciliation but must not fail the request.
+    const results = await Promise.all(
+      storageKeys.map((key) => safeStorageDelete(key, `account-delete:user-${userId}`))
+    );
+    const failed = results.filter((ok) => !ok).length;
+    if (failed > 0) {
+      logger.error({ userId, failed, total: storageKeys.length }, 'Account deleted with orphaned storage objects');
+    }
 
     clearAuthCookies(res);
     res.json({ message: 'Account deleted permanently' });

@@ -56,27 +56,46 @@ describe('Auth Controller', () => {
       const res = await request(app)
         .post('/api/auth/register')
         .send({ ...u, confirmPassword: u.password })
-        .expect(StatusCodes.CREATED);
+        .expect(StatusCodes.OK);
 
       expect(res.body.message).toContain('verification code');
-      expect(res.body.email).toBe(u.email);
       expect(res.headers['set-cookie']).toBeUndefined();
 
       const code = getLastSentCode(u.email, 'email_verification');
       expect(code).toMatch(/^\d{6}$/);
     });
 
-    it('should not register a duplicate email', async () => {
+    it('should respond identically for a verified duplicate email (no enumeration)', async () => {
       const u = validUser();
       await request(app)
         .post('/api/auth/register')
         .send({ ...u, confirmPassword: u.password })
-        .expect(StatusCodes.CREATED);
+        .expect(StatusCodes.OK);
 
+      // Verify so the account exists in its final state.
       await request(app)
+        .post('/api/auth/verify-email')
+        .send({ email: u.email, otp: getLastSentCode(u.email, 'email_verification') })
+        .expect(StatusCodes.OK);
+
+      const freshProbe = {
+        name: 'Fresh User',
+        email: 'fresh-enumeration-probe@example.com',
+        password: 'SecurePass123!',
+        confirmPassword: 'SecurePass123!',
+      };
+
+      const duplicateRes = await request(app)
         .post('/api/auth/register')
         .send({ ...u, confirmPassword: u.password })
-        .expect(StatusCodes.CONFLICT);
+        .expect(StatusCodes.OK);
+
+      const newAccountRes = await request(app)
+        .post('/api/auth/register')
+        .send(freshProbe)
+        .expect(StatusCodes.OK);
+
+      expect(duplicateRes.body.message).toBe(newAccountRes.body.message);
     });
 
     it('should reject an invalid email', async () => {
@@ -109,7 +128,7 @@ describe('Auth Controller', () => {
       await request(app)
         .post('/api/auth/register')
         .send({ ...u, confirmPassword: u.password })
-        .expect(StatusCodes.CREATED);
+        .expect(StatusCodes.OK);
 
       const code = getLastSentCode(u.email, 'email_verification')!;
       const res = await request(app)
@@ -139,7 +158,7 @@ describe('Auth Controller', () => {
       await request(app)
         .post('/api/auth/register')
         .send({ ...u, confirmPassword: u.password })
-        .expect(StatusCodes.CREATED);
+        .expect(StatusCodes.OK);
 
       await request(app)
         .post('/api/auth/verify-email')
@@ -160,7 +179,7 @@ describe('Auth Controller', () => {
       await request(app)
         .post('/api/auth/register')
         .send({ ...u, confirmPassword: u.password })
-        .expect(StatusCodes.CREATED);
+        .expect(StatusCodes.OK);
       const code = getLastSentCode(u.email, 'email_verification')!;
 
       // Exceed OTP_MAX_ATTEMPTS (default 5) with wrong guesses.
@@ -185,7 +204,7 @@ describe('Auth Controller', () => {
       await request(app)
         .post('/api/auth/register')
         .send({ ...u, confirmPassword: u.password })
-        .expect(StatusCodes.CREATED);
+        .expect(StatusCodes.OK);
 
       const first = getLastSentCode(u.email, 'email_verification')!;
       await request(app)
@@ -215,7 +234,7 @@ describe('Auth Controller', () => {
         await request(app)
           .post('/api/auth/register')
           .send({ ...u, confirmPassword: u.password })
-          .expect(StatusCodes.CREATED);
+          .expect(StatusCodes.OK);
 
         // Within the 60s window of the registration email → blocked.
         await request(app)
@@ -234,7 +253,7 @@ describe('Auth Controller', () => {
       await request(app)
         .post('/api/auth/register')
         .send({ ...u, confirmPassword: u.password })
-        .expect(StatusCodes.CREATED);
+        .expect(StatusCodes.OK);
 
       const res = await request(app)
         .post('/api/auth/login')
@@ -249,7 +268,7 @@ describe('Auth Controller', () => {
       await request(app)
         .post('/api/auth/register')
         .send({ ...u, confirmPassword: u.password })
-        .expect(StatusCodes.CREATED);
+        .expect(StatusCodes.OK);
       const code = getLastSentCode(u.email, 'email_verification')!;
       await request(app)
         .post('/api/auth/verify-email')
@@ -272,7 +291,7 @@ describe('Auth Controller', () => {
       await request(app)
         .post('/api/auth/register')
         .send({ ...u, confirmPassword: u.password })
-        .expect(StatusCodes.CREATED);
+        .expect(StatusCodes.OK);
       const code = getLastSentCode(u.email, 'email_verification')!;
       await request(app)
         .post('/api/auth/verify-email')
@@ -299,7 +318,7 @@ describe('Auth Controller', () => {
       await request(app)
         .post('/api/auth/register')
         .send({ ...u, confirmPassword: u.password })
-        .expect(StatusCodes.CREATED);
+        .expect(StatusCodes.OK);
       const vcode = getLastSentCode(u.email, 'email_verification')!;
       await request(app)
         .post('/api/auth/verify-email')
@@ -330,7 +349,7 @@ describe('Auth Controller', () => {
       await request(app)
         .post('/api/auth/register')
         .send({ ...u, confirmPassword: u.password })
-        .expect(StatusCodes.CREATED);
+        .expect(StatusCodes.OK);
       const vcode = getLastSentCode(u.email, 'email_verification')!;
       const verifyRes = await request(app)
         .post('/api/auth/verify-email')
@@ -373,7 +392,7 @@ describe('Auth Controller', () => {
       await request(app)
         .post('/api/auth/register')
         .send({ ...u, confirmPassword: u.password })
-        .expect(StatusCodes.CREATED);
+        .expect(StatusCodes.OK);
       const vcode = getLastSentCode(u.email, 'email_verification')!;
       await request(app)
         .post('/api/auth/verify-email')
@@ -397,7 +416,7 @@ describe('Auth Controller', () => {
       await request(app)
         .post('/api/auth/register')
         .send({ ...u, confirmPassword: u.password })
-        .expect(StatusCodes.CREATED);
+        .expect(StatusCodes.OK);
       const code = getLastSentCode(u.email, 'email_verification')!;
       await request(app)
         .post('/api/auth/verify-email')
@@ -437,7 +456,7 @@ describe('Auth Controller', () => {
       await request(app)
         .post('/api/auth/register')
         .send({ ...u, confirmPassword: u.password })
-        .expect(StatusCodes.CREATED);
+        .expect(StatusCodes.OK);
       const code = getLastSentCode(u.email, 'email_verification')!;
       await request(app)
         .post('/api/auth/verify-email')
@@ -469,7 +488,7 @@ describe('Auth Controller', () => {
       await request(app)
         .post('/api/auth/register')
         .send({ ...u, confirmPassword: u.password })
-        .expect(StatusCodes.CREATED);
+        .expect(StatusCodes.OK);
       const code = getLastSentCode(u.email, 'email_verification')!;
       const verifyRes = await request(app)
         .post('/api/auth/verify-email')
@@ -489,7 +508,7 @@ describe('Auth Controller', () => {
       await request(app)
         .post('/api/auth/register')
         .send({ ...u, confirmPassword: u.password })
-        .expect(StatusCodes.CREATED);
+        .expect(StatusCodes.OK);
       const code = getLastSentCode(u.email, 'email_verification')!;
       const verifyRes = await request(app)
         .post('/api/auth/verify-email')

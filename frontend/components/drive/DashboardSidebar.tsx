@@ -61,6 +61,7 @@ export default function DashboardSidebar({
   const [expanded, setExpanded] = useState<Set<number>>(new Set());
   const [menuFor, setMenuFor] = useState<number | null>(null);
   const menuRef = useRef<HTMLDivElement>(null);
+  const menuTriggerRef = useRef<HTMLButtonElement>(null);
 
   const childrenOf = useMemo(() => {
     const map = new Map<number | null, Folder[]>();
@@ -90,6 +91,49 @@ export default function DashboardSidebar({
     document.addEventListener('click', handleClickOutside);
     return () => document.removeEventListener('click', handleClickOutside);
   }, []);
+
+  // Keyboard support for the folder context menu, mirroring the file menu in
+  // FileGrid: Escape closes, arrows/Home/End rove focus, focus lands on the
+  // first item on open and returns to the ⋯ trigger on close.
+  useEffect(() => {
+    if (menuFor === null) return;
+    const items = menuRef.current
+      ? Array.from(
+          menuRef.current.querySelectorAll<HTMLButtonElement>('button[role="menuitem"]')
+        )
+      : [];
+    items[0]?.focus();
+
+    const handleKey = (e: KeyboardEvent) => {
+      if (e.key === 'Escape') {
+        setMenuFor(null);
+        return;
+      }
+      if (items.length === 0) return;
+      const current = document.activeElement as HTMLButtonElement | null;
+      let idx = items.indexOf(current as HTMLButtonElement);
+      if (e.key === 'ArrowDown') {
+        e.preventDefault();
+        idx = idx < 0 ? 0 : Math.min(idx + 1, items.length - 1);
+        items[idx].focus();
+      } else if (e.key === 'ArrowUp') {
+        e.preventDefault();
+        idx = idx < 0 ? items.length - 1 : Math.max(idx - 1, 0);
+        items[idx].focus();
+      } else if (e.key === 'Home') {
+        e.preventDefault();
+        items[0].focus();
+      } else if (e.key === 'End') {
+        e.preventDefault();
+        items[items.length - 1].focus();
+      }
+    };
+    document.addEventListener('keydown', handleKey);
+    return () => {
+      document.removeEventListener('keydown', handleKey);
+      menuTriggerRef.current?.focus();
+    };
+  }, [menuFor]);
 
   const navItems: NavItem[] = [
     { key: 'all', label: 'My Files', icon: HouseSimple },
@@ -134,32 +178,46 @@ export default function DashboardSidebar({
           <button
             className="drive-row-menu"
             aria-label={`Actions for ${folder.name}`}
+            aria-haspopup="menu"
+            aria-expanded={menuFor === folder.id}
             onClick={(e) => {
               e.stopPropagation();
-              setMenuFor(menuFor === folder.id ? null : folder.id);
+              if (menuFor !== folder.id) {
+                // Remember the trigger so focus can return here on close.
+                menuTriggerRef.current = e.currentTarget;
+                setMenuFor(folder.id);
+              } else {
+                setMenuFor(null);
+              }
             }}
           >
             <DotsThreeVertical size={14} weight="bold" />
           </button>
           {menuFor === folder.id && (
-            <div className="drive-menu" onClick={(e) => e.stopPropagation()}>
-              <button onClick={() => { onRenameFolder(folder); setMenuFor(null); }}>
+            <div
+              className="drive-menu"
+              onClick={(e) => e.stopPropagation()}
+              ref={menuRef}
+              role="menu"
+              aria-label={`Actions for ${folder.name}`}
+            >
+              <button role="menuitem" onClick={() => { onRenameFolder(folder); setMenuFor(null); }}>
                 Rename
               </button>
-              <button onClick={() => { onMoveFolder(folder); setMenuFor(null); }}>
+              <button role="menuitem" onClick={() => { onMoveFolder(folder); setMenuFor(null); }}>
                 Move
               </button>
               {folder.trashed_at ? (
                 <>
-                  <button onClick={() => { onRestoreFolder(folder); setMenuFor(null); }}>
+                  <button role="menuitem" onClick={() => { onRestoreFolder(folder); setMenuFor(null); }}>
                     Restore
                   </button>
-                  <button onClick={() => { onDeleteFolder(folder); setMenuFor(null); }}>
+                  <button role="menuitem" className="danger" onClick={() => { onDeleteFolder(folder); setMenuFor(null); }}>
                     Delete forever
                   </button>
                 </>
               ) : (
-                <button onClick={() => { onTrashFolder(folder); setMenuFor(null); }}>
+                <button role="menuitem" onClick={() => { onTrashFolder(folder); setMenuFor(null); }}>
                   Move to trash
                 </button>
               )}

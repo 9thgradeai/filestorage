@@ -13,6 +13,7 @@ import {
 } from '@phosphor-icons/react';
 import { useAuth } from '../../lib/auth';
 import { Brand } from '../../components/Brand';
+import { isValidEmail } from '../../lib/validate';
 
 interface LoginError extends Error {
   status?: number;
@@ -20,10 +21,10 @@ interface LoginError extends Error {
 }
 
 const VAULT_CHECKS = [
-  { label: 'AES-256 ENCRYPTION AT REST', delayNote: 's3:sse' },
-  { label: 'MAGIC-BYTE FILE VALIDATION', delayNote: 'upload' },
-  { label: 'ROTATING SESSION TOKENS', delayNote: 'auth' },
-  { label: 'SHARE LINKS EXPIRE IN 7 DAYS', delayNote: 'share' },
+  { label: 'AES-256 ENCRYPTION AT REST' },
+  { label: 'MAGIC-BYTE FILE VALIDATION' },
+  { label: 'ROTATING SESSION TOKENS' },
+  { label: 'SHARE LINKS EXPIRE IN 7 DAYS' },
 ];
 
 export default function LoginPage() {
@@ -45,6 +46,9 @@ export default function LoginPage() {
     e.preventDefault();
     setError('');
     setUnverified(false);
+    if (!email.trim()) return setError('Email is required');
+    if (!isValidEmail(email)) return setError('Enter a valid email address');
+    if (!password) return setError('Password is required');
     setBusy(true);
     try {
       await login(email, password);

@@ -224,6 +224,15 @@ export default function DashboardPage() {
         reload(1, mode);
       };
 
+      // Uploads race in parallel, so "last by index" ≠ "last to settle" —
+      // count settlements and refresh exactly once when every upload is done
+      // or errored.
+      let settled = 0;
+      const onSettled = () => {
+        settled += 1;
+        if (accepted.length > 0 && settled === accepted.length) finish();
+      };
+
       accepted.forEach((file, i) => {
         const id = `upload-${Date.now()}-${i}-${Math.random().toString(36).slice(2, 8)}`;
         setUploadItems((prev) => [
@@ -240,7 +249,7 @@ export default function DashboardPage() {
             setUploadItems((prev) =>
               prev.map((u) => (u.id === id ? { ...u, status: 'done', progress: 100 } : u))
             );
-            if (i === accepted.length - 1) finish();
+            onSettled();
           })
           .catch((err) => {
             setUploadItems((prev) =>
@@ -248,6 +257,7 @@ export default function DashboardPage() {
                 u.id === id ? { ...u, status: 'error', error: err.message } : u
               )
             );
+            onSettled();
           });
       });
     },

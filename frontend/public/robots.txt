@@ -1,0 +1,6 @@
+# Allow crawlers to index the public marketing site only.
+User-agent: *
+Allow: /
+Disallow: /dashboard
+Disallow: /settings
+Disallow: /shared/

@@ -14,6 +14,7 @@ import {
 } from '@phosphor-icons/react';
 import { useAuth } from '../../lib/auth';
 import { Brand } from '../../components/Brand';
+import { isValidEmail, passwordIssue } from '../../lib/validate';
 
 const VAULT_CHECKS = [
   'PASSWORD HASHED · BCRYPT 12 ROUNDS',
@@ -65,6 +66,11 @@ export default function RegisterPage() {
   const handleRegister = async (e: React.FormEvent) => {
     e.preventDefault();
     setError('');
+    if (!name.trim()) return setError('Name is required');
+    if (!email.trim()) return setError('Email is required');
+    if (!isValidEmail(email)) return setError('Enter a valid email address');
+    const pwIssue = passwordIssue(password);
+    if (pwIssue) return setError(pwIssue);
     if (password !== confirmPassword) {
       setError('Passwords do not match');
       return;
@@ -83,6 +89,8 @@ export default function RegisterPage() {
   const handleVerify = async (e: React.FormEvent) => {
     e.preventDefault();
     setError('');
+    if (!otp.trim()) return setError('Verification code is required');
+    if (!/^\d{6}$/.test(otp.trim())) return setError('The code is 6 digits');
     setBusy(true);
     try {
       await verifyEmail(email, otp.trim());

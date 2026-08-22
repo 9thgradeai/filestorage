@@ -1,7 +1,7 @@
 import { Request, Response } from 'express';
 import { StatusCodes } from 'http-status-codes';
 import { FolderModel } from '../models/folder.model';
-import { storageDelete } from '../services/storage.service';
+import { safeStorageDelete } from '../services/storage.service';
 import { validateCreateFolder, validateUpdateFolder } from '../services/validation';
 import { logger } from '../config/logger';
 
@@ -142,7 +142,7 @@ export const deleteFolder = async (req: Request, res: Response) => {
 
     // Gather storage keys first, remove objects (best-effort), then drop rows.
     const keys = await FolderModel.subtreeFileKeys(id, userId);
-    await Promise.all(keys.map((k) => storageDelete(k).catch(() => {})));
+    await Promise.all(keys.map((k) => safeStorageDelete(k, `folder-delete:${id}`)));
     await FolderModel.deleteRecursive(id, userId);
 
     return res.status(StatusCodes.OK).json({ message: 'Folder permanently deleted' });

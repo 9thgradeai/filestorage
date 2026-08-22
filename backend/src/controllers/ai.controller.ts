@@ -583,7 +583,15 @@ async function chatWithGroq(userId: number, userMessage: string): Promise<Action
         }
 
         logger.debug({ userId, function: fnName, args: fnArgs }, 'Groq function call');
-        const result = await executeFunction(userId, fnName, fnArgs);
+        // A single bad tool call (malformed args, DB hiccup) must not abort
+        // the whole exchange — surface it as a failed tool result instead.
+        let result: ActionResult;
+        try {
+          result = await executeFunction(userId, fnName, fnArgs);
+        } catch (err) {
+          logger.warn({ err, userId, function: fnName }, 'AI tool execution failed');
+          result = { type: 'text', message: `I couldn't complete that action (${fnName}). Please try again.` };
+        }
         toolResults.push({
           role: 'tool',
           tool_call_id: toolCall.id,

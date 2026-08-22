@@ -17,6 +17,9 @@ const geistMono = Geist_Mono({
 });
 
 export const metadata = {
+  // Anchor for resolving absolute OG/Twitter image URLs; set NEXT_PUBLIC_SITE_URL
+  // in production so social cards point at the real domain.
+  metadataBase: new URL(process.env.NEXT_PUBLIC_SITE_URL || 'http://localhost:3000'),
   title: {
     default: 'Vault · Secure File Storage',
     template: '%s · Vault',

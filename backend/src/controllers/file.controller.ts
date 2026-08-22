@@ -3,7 +3,7 @@ import fs from 'fs';
 import { StatusCodes } from 'http-status-codes';
 import { FileModel } from '../models/file.model';
 import { FolderModel } from '../models/folder.model';
-import { storageUpload, storageDelete, storageDownload } from '../services/storage.service';
+import { storageUpload, storageDownload, safeStorageDelete } from '../services/storage.service';
 import { validateUpload, MAX_FILE_SIZE } from '../services/fileValidation';
 import {
   validateTogglePublic,
@@ -119,7 +119,7 @@ export const uploadFile = async (req: Request, res: Response) => {
     } catch (error) {
       // Metadata insert failed → remove the orphaned storage object.
       logger.error({ err: error }, 'File metadata insert error:');
-      await storageDelete(s3Key).catch(() => {});
+      await safeStorageDelete(s3Key, 'upload-rollback');
       return res.status(StatusCodes.INTERNAL_SERVER_ERROR).json({ message: 'File upload failed' });
     }
   } catch (error) {
@@ -296,7 +296,7 @@ export const deleteFile = async (req: Request, res: Response) => {
     if (!file) return res.status(StatusCodes.NOT_FOUND).json({ message: 'File not found' });
 
     // Remove from storage first, then DB.
-    await storageDelete(file.s3_key);
+    await safeStorageDelete(file.s3_key, `file-delete:${id}`);
     const deleted = await FileModel.deleteFile(id, userId);
     if (!deleted) return res.status(StatusCodes.NOT_FOUND).json({ message: 'File not found' });
 

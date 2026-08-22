@@ -1,11 +1,12 @@
 'use client';
 
-import { useEffect, useState } from 'react';
+import { useEffect, useRef, useState } from 'react';
 import { X, DownloadSimple, Star, File } from '@phosphor-icons/react';
 import toast from 'react-hot-toast';
 import { FileTypeIcon } from '../FileTypeIcon';
 import { formatBytes } from '../../lib/format';
 import { driveApi, type DriveFile } from '../../lib/drive';
+import { useFocusTrap } from '../../lib/useFocusTrap';
 
 interface Props {
   file: DriveFile;
@@ -33,6 +34,9 @@ export default function PreviewModal({ file, onClose, onStarred }: Props) {
   const [url, setUrl] = useState<string | null>(null);
   const [text, setText] = useState<string | null>(null);
   const [error, setError] = useState(false);
+  const modalRef = useRef<HTMLDivElement>(null);
+
+  useFocusTrap(modalRef, true);
 
   useEffect(() => {
     let objectUrl: string | null = null;
@@ -79,7 +83,7 @@ export default function PreviewModal({ file, onClose, onStarred }: Props) {
 
   return (
     <div className="modal-overlay" onClick={onClose} role="dialog" aria-modal="true" aria-label={file.original_filename}>
-      <div className="modal modal-preview" onClick={(e) => e.stopPropagation()}>
+      <div ref={modalRef} className="modal modal-preview" onClick={(e) => e.stopPropagation()}>
         <div className="modal-head">
           <div className="modal-title">
             <FileTypeIcon name={file.original_filename} size={18} />

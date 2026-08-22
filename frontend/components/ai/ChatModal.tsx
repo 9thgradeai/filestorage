@@ -18,6 +18,7 @@ import {
 import toast from 'react-hot-toast';
 import { api } from '../../lib/api';
 import { driveApi } from '../../lib/drive';
+import { useFocusTrap } from '../../lib/useFocusTrap';
 
 interface FileCard {
   type: 'file_card';
@@ -250,6 +251,8 @@ export default function ChatModal() {
     window.addEventListener('ai:toggle', toggle);
     return () => window.removeEventListener('ai:toggle', toggle);
   }, []);
+
+  useFocusTrap(panelRef, open);
 
   useEffect(() => {
     const reduce = window.matchMedia('(prefers-reduced-motion: reduce)').matches;

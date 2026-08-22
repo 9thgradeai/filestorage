@@ -7,7 +7,7 @@ export interface ApiError extends Error {
   data?: any;
 }
 
-function buildUrl(path: string): string {
+export function buildUrl(path: string): string {
   return path.startsWith('http') ? path : `${API_URL}${path}`;
 }
 

@@ -1,9 +1,10 @@
 'use client';
 
-import { useEffect, useMemo, useState } from 'react';
+import { useEffect, useMemo, useRef, useState } from 'react';
 import toast from 'react-hot-toast';
 import { X, Folder as FolderIcon, Check, LinkSimple, Triangle, Copy } from '@phosphor-icons/react';
 import type { DriveFile, Folder } from '../../lib/drive';
+import { useFocusTrap } from '../../lib/useFocusTrap';
 
 export interface DialogState {
   kind: 'newFolder' | 'renameFile' | 'renameFolder' | 'moveFile' | 'moveFolder' | 'share' | 'confirmDelete';
@@ -68,6 +69,9 @@ export default function DriveDialogs({
   const [moveDest, setMoveDest] = useState<number | null | undefined>(undefined);
   const [shareUrl, setShareUrl] = useState('');
   const [copied, setCopied] = useState(false);
+  const modalRef = useRef<HTMLDivElement>(null);
+
+  useFocusTrap(modalRef, !!dialog);
 
   const title = useMemo(() => {
     if (!dialog) return '';
@@ -192,7 +196,7 @@ export default function DriveDialogs({
 
   return (
     <div className="modal-overlay" onClick={onClose} role="dialog" aria-modal="true" aria-label={title}>
-      <div className="modal" onClick={(e) => e.stopPropagation()}>
+      <div ref={modalRef} className="modal" onClick={(e) => e.stopPropagation()}>
         <div className="modal-head">
           <span className="modal-title-name">{title}</span>
           <button className="btn-icon" aria-label="Close" onClick={onClose}>

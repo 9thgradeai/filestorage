@@ -300,16 +300,39 @@ export const FileModel = {
     return (result.rowCount ?? 0) > 0;
   },
 
+  // Every storage key owned by the user (trashed included). Used to purge
+  // stored objects before/after cascading deletes wipe the rows.
+  async listAllStorageKeys(userId: number): Promise<string[]> {
+    const result = await pool.query(
+      'SELECT s3_key FROM files WHERE user_id = $1',
+      [userId]
+    );
+    return result.rows.map((row) => row.s3_key as string);
+  },
+
+  // Atomic trash purge: deletes expired rows and returns their storage keys.
+  // Single statement so a concurrent restore can never have its object purged.
+  async deleteExpiredTrash(olderThanDays: number): Promise<string[]> {
+    const result = await pool.query(
+      `DELETE FROM files
+       WHERE trashed_at IS NOT NULL
+         AND trashed_at < NOW() - ($1 || ' days')::interval
+       RETURNING s3_key`,
+      [olderThanDays]
+    );
+    return result.rows.map((row) => row.s3_key as string);
+  },
+
   async getStats(userId: number): Promise<StatsRow> {
     const result = await pool.query(
       `SELECT
-         COALESCE(SUM(file_size) FILTER (WHERE trashed_at IS NULL), 0)::bigint AS used,
-         COUNT(*) FILTER (WHERE trashed_at IS NULL)::int AS active,
-         COUNT(*) FILTER (WHERE starred)::int AS starred,
-         COUNT(*) FILTER (WHERE trashed_at IS NOT NULL)::int AS trashed,
-         COUNT(*)::int AS total
-       FROM files
-       WHERE user_id = $1`,
+          COALESCE(SUM(file_size), 0)::bigint AS used,
+          COUNT(*) FILTER (WHERE trashed_at IS NULL)::int AS active,
+          COUNT(*) FILTER (WHERE starred)::int AS starred,
+          COUNT(*) FILTER (WHERE trashed_at IS NOT NULL)::int AS trashed,
+          COUNT(*)::int AS total
+        FROM files
+        WHERE user_id = $1`,
       [userId]
     );
     return result.rows[0];

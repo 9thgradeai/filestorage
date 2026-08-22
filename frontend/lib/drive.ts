@@ -1,4 +1,4 @@
-import { api, downloadFile } from './api';
+import { api, buildUrl, downloadFile } from './api';
 
 export interface DriveFile {
   id: number;
@@ -176,7 +176,7 @@ export const driveApi = {
       if (parentId !== null) form.append('parent_id', String(parentId));
 
       const xhr = new XMLHttpRequest();
-      xhr.open('POST', '/api/files/upload');
+      xhr.open('POST', buildUrl('/api/files/upload'));
       xhr.withCredentials = true;
 
       const csrf = document.cookie.match(/(?:^|;\s*)csrf_token=([^;]+)/)?.[1];

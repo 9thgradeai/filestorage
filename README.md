@@ -13,7 +13,7 @@ verification, rotating session security, and pluggable object storage.
 [![PostgreSQL](https://img.shields.io/badge/postgres-16-4169E1?logo=postgresql&logoColor=white)](https://www.postgresql.org)
 [![Next.js](https://img.shields.io/badge/next.js-16-000000?logo=nextdotjs&logoColor=white)](https://nextjs.org)
 [![React](https://img.shields.io/badge/react-19-61DAFB?logo=react&logoColor=black)](https://react.dev)
-[![Jest](https://img.shields.io/badge/tests-79%20passing-C21325?logo=jest&logoColor=white)]()
+[![Jest](https://img.shields.io/badge/tests-114%20passing-C21325?logo=jest&logoColor=white)]()
 [![Dependencies](https://img.shields.io/badge/npm%20audit-0%20vulnerabilities-success)]()
 
 </div>
@@ -443,10 +443,13 @@ Production **fails fast** on missing/invalid values.
 | `BCRYPT_ROUNDS` | `12` | — | Password hashing cost |
 | `MAX_FILE_SIZE` | `104857600` | — | Max upload bytes (100 MB) |
 | `SHARE_LINK_EXPIRY_DAYS` | `7` | — | Public share-link TTL |
+| `TRASH_RETENTION_DAYS` | `30` | — | Days before trashed files are purged permanently |
 | `RATE_LIMIT_WINDOW_MS` | `900000` | — | Global rate-limit window |
 | `RATE_LIMIT_MAX` | `100` | — | Global per-IP requests/window |
 | `AUTH_RATE_LIMIT_MAX` | `20` | — | Login attempts per IP / 15 min |
 | `OTP_RATE_LIMIT_MAX` | `30` | — | OTP endpoints per IP / 15 min |
+| `GROQ_API_KEY` | — | — | Vault AI assistant (chat degrades gracefully if unset) |
+| `AI_MODEL` | `openai/gpt-oss-120b` | — | Groq chat model for the AI assistant |
 | `LOG_LEVEL` | `info` | — | pino log level |
 
 > Provider precedence: **Resend** if `RESEND_API_KEY` is set, else **SendGrid**
@@ -652,14 +655,30 @@ on every green push to `main`.
 | GET | `/api/auth/me` | ✓ | Current user |
 | POST | `/api/files/upload` | ✓* | Multipart upload (magic-byte validated) |
 | GET | `/api/files?page=&limit=` | ✓ | Paginated list |
+| GET | `/api/files/stats` | ✓ | Quota usage + counts |
+| GET | `/api/files/recent` | ✓ | Recent active files |
 | GET | `/api/files/:id` | ✓ | Metadata |
+| PUT | `/api/files/:id` | ✓* | Rename / move |
+| POST | `/api/files/:id/trash` | ✓* | Soft-delete to trash |
+| POST | `/api/files/:id/restore` | ✓* | Restore from trash |
+| POST | `/api/files/:id/star` | ✓* | Toggle starred |
 | GET | `/api/files/:id/download` | ✓ | Streams file bytes |
 | DELETE | `/api/files/:id` | ✓* | Deletes stored file + metadata |
 | PUT | `/api/files/:id/toggle-public` | ✓* | Public/private toggle |
 | POST | `/api/files/:id/share` | ✓* | Generates expiring share token |
 | GET | `/api/files/public/:token/info` | — | Safe metadata for the shared page |
 | GET | `/api/files/public/:token` | — | Streams a public file (attachment) |
+| GET | `/api/folders` | ✓ | List owned folders |
+| POST | `/api/folders` | ✓* | Create folder (optional parent) |
+| PUT | `/api/folders/:id` | ✓* | Rename / move (cycle-checked) |
+| POST | `/api/folders/:id/trash` | ✓* | Trash subtree recursively |
+| POST | `/api/folders/:id/restore` | ✓* | Restore subtree |
+| DELETE | `/api/folders/:id` | ✓* | Permanent delete incl. storage objects |
+| POST | `/api/ai/chat` | ✓* | Vault AI assistant (Groq; file/folder ops) |
 | GET | `/api/health` | — | DB-aware readiness check |
+
+Trashed files are purged automatically after `TRASH_RETENTION_DAYS`
+(default 30); trashed bytes count toward the quota until purge.
 
 Mutating requests authenticate via `Authorization: Bearer` **or** the HttpOnly
 access-token cookie. Header-based requests are CSRF-exempt (API clients);
@@ -695,7 +714,7 @@ Validation errors use Joi's message as `message`.
 ```bash
 # Backend (needs a test DB; see backend/jest.config.js defaults)
 cd backend
-JWT_SECRET=test-secret npm test          # 79 tests, runInBand (avoids DB deadlocks)
+JWT_SECRET=test-secret npm test          # 114 tests, runInBand (avoids DB deadlocks)
 JWT_SECRET=test-secret npm run test:coverage
 
 # Frontend
@@ -704,12 +723,12 @@ npm run lint
 npm run build
 ```
 
-- **79 backend tests** across auth, files, validation, rate limiting, security,
-  and email (Resend, SendGrid, and SMTP providers) — driving the real app against
-  a dedicated `filestorage_test` database with a fully mocked S3 client and
-  `fetch` (no network calls).
-- **Enforced coverage thresholds** — statements ≥ 80%, functions ≥ 75%,
-  branches ≥ 50% — currently exceeded across all metrics.
+- **114 backend tests** across auth, files/folders, the AI assistant controller,
+  validation, rate limiting, security, and email (Resend, SendGrid, and SMTP
+  providers) — driving the real app against a dedicated `filestorage_test`
+  database with a fully mocked S3 client and `fetch` (no network calls).
+- **Enforced coverage thresholds** — statements ≥ 50%, lines ≥ 50%,
+  functions ≥ 50%, branches ≥ 35% (`backend/jest.config.js`).
 - **CI (GitHub Actions)** spins up an ephemeral `postgres:16` service container
   and runs the full suite on every push/PR to `main`, plus frontend lint/build.
 - **`npm audit` clean** — 0 known vulnerabilities in the dependency tree.

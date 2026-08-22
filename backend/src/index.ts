@@ -14,6 +14,7 @@ import { pool } from './config/database';
 import { validateEnv } from './config/env';
 import { logger, httpLogger } from './config/logger';
 import { purgeExpiredOtps } from './services/otp.service';
+import { purgeExpiredTrash } from './services/trashPurge.service';
 
 dotenv.config();
 validateEnv();
@@ -81,8 +82,10 @@ app.use('/api/auth/resend-otp', otpLimiter);
 app.use('/api/auth/forgot-password', otpLimiter);
 app.use('/api/auth/reset-password', otpLimiter);
 
-app.use(express.json({ limit: '50mb' }));
-app.use(express.urlencoded({ extended: true, limit: '50mb' }));
+// JSON bodies are tiny (auth forms, folder renames, AI chat messages) — file
+// uploads go through multer with their own size limit, so 1MB is generous.
+app.use(express.json({ limit: '1mb' }));
+app.use(express.urlencoded({ extended: true, limit: '1mb' }));
 app.use(cookieParser());
 
 // Routes
@@ -130,6 +133,21 @@ if (require.main === module) {
     );
   }, 6 * 60 * 60 * 1000);
   otpSweep.unref();
+
+  // Purge trashed files past retention (default 30 days). Runs shortly after
+  // boot so objects from a previous short-lived instance get reclaimed.
+  const initialTrashPurge = setTimeout(() => {
+    purgeExpiredTrash().catch((err) =>
+      logger.error({ err: err }, 'Initial trash purge failed')
+    );
+  }, 30 * 1000);
+  initialTrashPurge.unref();
+  const trashSweep = setInterval(() => {
+    purgeExpiredTrash().catch((err) =>
+      logger.error({ err: err }, 'Scheduled trash purge failed')
+    );
+  }, 24 * 60 * 60 * 1000);
+  trashSweep.unref();
 
   // Graceful shutdown handling
   const gracefulShutdown = (signal: string) => {

@@ -91,23 +91,24 @@ work with `SameSite=Lax` and no CORS is exercised in production.
 ```
 filestorage/
 ├── backend/                 # Express API (TypeScript, compiled to dist/)
-│   ├── migrations/          # versioned SQL (001, 002, 003)
+│   ├── migrations/          # versioned SQL (001–004)
 │   ├── src/
 │   │   ├── config/          # env validation, pg pool, pino logger
-│   │   ├── controllers/     # auth + file request handlers
+│   │   ├── controllers/     # auth, file, folder, and AI chat handlers
 │   │   ├── middleware/      # authenticate, csrf, errorHandler
-│   │   ├── models/          # user, file, refreshToken (SQL access)
-│   │   ├── routes/          # auth.routes, file.routes
-│   │   ├── services/        # auth, otp, email, validation, storage, s3
+│   │   ├── models/          # user, file, folder, refreshToken (SQL access)
+│   │   ├── routes/          # auth.routes, file.routes, folder.routes, ai.routes
+│   │   ├── services/        # auth, otp, email, validation, storage, s3, trashPurge
 │   │   ├── db/migrate.ts    # idempotent migration runner
 │   │   ├── types/, utils/   # express typing, crypto helpers
 │   │   └── __tests__/       # Jest + supertest suites
 │   ├── Dockerfile           # multi-stage node:20-alpine build
 │   └── jest.config.js       # test + coverage thresholds
 ├── frontend/                # Next.js 16 app
-│   ├── app/                 # pages: dashboard, login, register, forgot-password, shared/[token]
-│   ├── lib/                 # api client, auth context
-│   ├── components/          # Brand, FileTypeIcon, ProductPreview, landing
+│   ├── app/                 # pages: dashboard, login, register, forgot-password,
+│   │                        # settings, shared/[token], terms, privacy
+│   ├── lib/                 # api client, auth context, drive helpers
+│   ├── components/          # Brand, FileTypeIcon, ProductPreview, landing, drive UI
 │   └── next.config.js       # /api/* rewrites to API_BACKEND_URL
 ├── .github/workflows/ci-cd.yml   # backend tests against ephemeral Postgres
 ├── docker-compose.yml       # local db + backend + frontend
@@ -118,7 +119,7 @@ filestorage/
 
 ## 4. Data Model (PostgreSQL)
 
-Three versioned, idempotent migrations are applied at container boot by
+Four versioned, idempotent migrations are applied at container boot by
 `backend/src/db/migrate.ts` (runs `node dist/db/migrate.js` in the Docker CMD
 before the API starts).
 
@@ -132,7 +133,7 @@ before the API starts).
 | email_verified_at | TIMESTAMP NULL | null = unverified; gates login (403) |
 | created_at / updated_at | TIMESTAMP | |
 
-### `files` (001)
+### `files` (001 → 004)
 | Column | Type | Notes |
 |---|---|---|
 | id | SERIAL PK | |
@@ -144,8 +145,22 @@ before the API starts).
 | is_public | BOOLEAN DEFAULT FALSE | |
 | share_token | VARCHAR(64) UNIQUE | opaque share identifier |
 | share_expires_at | TIMESTAMP | time-limited public access |
+| parent_id | FK → folders ON DELETE SET NULL (004) | folder membership |
+| starred | BOOLEAN NOT NULL DEFAULT FALSE (004) | favorites |
+| trashed_at | TIMESTAMP NULL (004) | non-null = in trash; purged after retention |
 | created_at / updated_at | TIMESTAMP | |
-| Indexes | user_id, is_public, share_token | |
+| Indexes | user_id, is_public, share_token, (user_id, trashed_at) | |
+
+### `folders` (004)
+| Column | Type | Notes |
+|---|---|---|
+| id | SERIAL PK | |
+| user_id | FK → users ON DELETE CASCADE | ownership |
+| name | VARCHAR(255) NOT NULL | not unique per user |
+| parent_id | FK → folders ON DELETE CASCADE NULL | nesting; cycles blocked at the app layer |
+| trashed_at | TIMESTAMP NULL | trash applies to the whole subtree recursively |
+| created_at / updated_at | TIMESTAMP | |
+| Indexes | user_id, parent_id, (user_id, trashed_at) | |
 
 ### `refresh_tokens` (002)
 | Column | Type | Notes |
@@ -311,17 +326,43 @@ free-tier (volume) and production-scale (S3) usage.
 | Method | Path | Auth | Description |
 |---|---|---|---|
 | POST | `/upload` | JWT+CSRF | Multipart upload |
-| GET | `/` | JWT | List owned files |
+| GET | `/` | JWT | List owned files (pagination, filters) |
+| GET | `/stats` | JWT | Quota meter + counts |
+| GET | `/recent` | JWT | Most recent active files |
 | GET | `/:id` | JWT | File metadata |
-| DELETE | `/:id` | JWT+CSRF | Delete (DB + storage) |
+| PUT | `/:id` | JWT+CSRF | Rename / move |
+| DELETE | `/:id` | JWT+CSRF | Permanent delete (storage first, then row) |
+| POST | `/:id/trash` / `/restore` | JWT+CSRF | Soft-delete lifecycle |
+| POST | `/:id/star` | JWT+CSRF | Toggle starred |
 | PUT | `/:id/toggle-public` | JWT+CSRF | Toggle shareability |
 | GET | `/:id/download` | JWT | Stream bytes |
 | POST | `/:id/share` | JWT+CSRF | Create share token |
 | GET | `/public/:token/info` | — | Public metadata |
 | GET | `/public/:token` | — | Public download |
 
+### Folders (`/api/folders`)
+| Method | Path | Auth | Description |
+|---|---|---|---|
+| GET | `/` | JWT | List owned folders |
+| POST | `/` | JWT+CSRF | Create (optional parent) |
+| PUT | `/:id` | JWT+CSRF | Rename / move (cycle-checked) |
+| POST | `/:id/trash` | JWT+CSRF | Trash subtree recursively |
+| POST | `/:id/restore` | JWT+CSRF | Restore subtree |
+| DELETE | `/:id` | JWT+CSRF | Permanent delete incl. storage objects |
+
+### AI (`/api/ai`)
+| Method | Path | Auth | Description |
+|---|---|---|---|
+| POST | `/chat` | JWT+CSRF | Vault AI assistant (Groq tool-calling; file/folder ops, search, stats). Falls back to a config-missing notice when `GROQ_API_KEY` is unset. |
+
 ### System
 - `GET /api/health` — DB-aware health (200/503) for load-balancer draining.
+
+### Background jobs
+- OTP sweep every 6h (`purgeExpiredOtps`).
+- Trash purge on boot + every 24h: rows past `TRASH_RETENTION_DAYS`
+  (default 30) are deleted atomically with `RETURNING s3_key`, then objects are
+  removed best-effort with retries.
 
 ---
 
@@ -329,8 +370,9 @@ free-tier (volume) and production-scale (S3) usage.
 
 - **App Router** with client components; routes: `/` (landing),
   `/register` (multi-step name → OTP → verify), `/login` (incl. resend +
-  forgot), `/forgot-password` (email → OTP → new password), `/dashboard`,
-  `/shared/[token]` (public file).
+  forgot), `/forgot-password` (email → OTP → new password), `/dashboard`
+  (files + folders + trash + AI chat), `/settings` (profile, password, email,
+  account deletion), `/shared/[token]` (public file), `/terms`, `/privacy`.
 - **`lib/api.ts`** — typed fetch wrapper that:
   - sends `credentials: 'include'` (cookie sessions),
   - attaches `X-CSRF-Token` from the non-HttpOnly cookie on mutations,

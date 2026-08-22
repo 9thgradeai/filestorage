@@ -48,6 +48,19 @@ services:
       # Uploads / limits
       MAX_FILE_SIZE: 104857600
       SHARE_LINK_EXPIRY_DAYS: 7
+      # Storage driver: local by default so the quickstart needs zero AWS setup;
+      # override with STORAGE_DRIVER=s3 (+ credentials) to use the bucket.
+      STORAGE_DRIVER: ${STORAGE_DRIVER:-local}
+      STORAGE_DIR: /data
+      # Email provider (Resend preferred, SendGrid fallback). OTP emails fail
+      # closed into logs if unset — fine for a smoke test, not for real use.
+      RESEND_API_KEY: ${RESEND_API_KEY:-}
+      SENDGRID_API_KEY: ${SENDGRID_API_KEY:-}
+      EMAIL_FROM_EMAIL: ${EMAIL_FROM_EMAIL:-}
+      # Vault AI assistant (chat degrades gracefully when unset)
+      GROQ_API_KEY: ${GROQ_API_KEY:-}
+    volumes:
+      - filedata:/data
     ports:
       - '5000:5000'
 
@@ -68,3 +81,4 @@ services:
 
 volumes:
   pgdata:
+  filedata:

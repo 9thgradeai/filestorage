@@ -6,6 +6,7 @@ import {
   s3Delete as s3DeleteImpl,
   s3Download as s3DownloadImpl,
 } from './s3.service';
+import { logger } from '../config/logger';
 
 // Storage driver selection:
 //   STORAGE_DRIVER=local  → filesystem on STORAGE_DIR (Railway volume, dev disk)
@@ -60,6 +61,34 @@ export const storageDelete = async (key: string): Promise<void> => {
     return;
   }
   return s3DeleteImpl(key);
+};
+
+// Best-effort delete with retries and structured logging. Storage removal is
+// allowed to fail transiently, but failures must be observable so orphaned
+// objects can be reconciled — never silently swallowed.
+const STORAGE_DELETE_RETRIES = 3;
+const STORAGE_DELETE_RETRY_DELAY_MS = 250;
+
+export const safeStorageDelete = async (
+  key: string,
+  context: string
+): Promise<boolean> => {
+  for (let attempt = 1; attempt <= STORAGE_DELETE_RETRIES; attempt++) {
+    try {
+      await storageDelete(key);
+      return true;
+    } catch (err) {
+      logger.warn(
+        { err, key: `${context}:${key.slice(0, 12)}…`, attempt },
+        'Storage delete failed'
+      );
+      if (attempt < STORAGE_DELETE_RETRIES) {
+        await new Promise((r) => setTimeout(r, STORAGE_DELETE_RETRY_DELAY_MS * attempt));
+      }
+    }
+  }
+  logger.error({ key: `${context}:${key.slice(0, 12)}…` }, `Storage delete failed after ${STORAGE_DELETE_RETRIES} attempts — object may be orphaned`);
+  return false;
 };
 
 export const storageDownload = async (key: string): Promise<Readable> => {

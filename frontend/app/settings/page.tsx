@@ -14,6 +14,7 @@ import {
   ShieldCheck,
 } from '@phosphor-icons/react';
 import { useAuth } from '../../lib/auth';
+import { isValidEmail, passwordIssue } from '../../lib/validate';
 import toast from 'react-hot-toast';
 
 export default function SettingsPage() {
@@ -84,6 +85,9 @@ export default function SettingsPage() {
 
   const handlePassword = async (e: React.FormEvent) => {
     e.preventDefault();
+    if (!currentPassword) return toast.error('Current password is required');
+    const pwIssue = passwordIssue(newPassword);
+    if (pwIssue) return toast.error(pwIssue);
     if (newPassword !== confirmPassword) return toast.error('Passwords do not match');
     setPasswordBusy(true);
     try {
@@ -102,6 +106,8 @@ export default function SettingsPage() {
   const handleEmail = async (e: React.FormEvent) => {
     e.preventDefault();
     if (!newEmail.trim()) return toast.error('New email is required');
+    if (!isValidEmail(newEmail)) return toast.error('Enter a valid email address');
+    if (!emailPassword) return toast.error('Current password is required to change your email');
     setEmailBusy(true);
     try {
       await changeEmail(newEmail, emailPassword);
