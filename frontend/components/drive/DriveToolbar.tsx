@@ -98,6 +98,7 @@ export default function DriveToolbar({
   const debouncedSearch = useDebounced(searchDraft, 260);
   const [userMenuOpen, setUserMenuOpen] = useState(false);
   const userMenuRef = useRef<HTMLDivElement>(null);
+  const userDropdownRef = useRef<HTMLDivElement>(null);
 
   useEffect(() => {
     onSearch(debouncedSearch);
@@ -113,6 +114,39 @@ export default function DriveToolbar({
     };
     document.addEventListener('mousedown', handleClick);
     return () => document.removeEventListener('mousedown', handleClick);
+  }, [userMenuOpen]);
+
+  // The dropdown anchors right:0 to the trigger button, but on wrapped mobile
+  // toolbar rows that button can sit near the LEFT edge, pushing the panel
+  // off-screen. After each open (and on resize) nudge it back into the
+  // viewport; no-op when it already fits.
+  useEffect(() => {
+    if (!userMenuOpen) return;
+    const clamp = () => {
+      const el = userDropdownRef.current;
+      if (!el) return;
+      el.style.left = '';
+      el.style.right = '';
+      const rect = el.getBoundingClientRect();
+      const pad = 8;
+      // Already inside the viewport — nothing to do.
+      if (rect.left >= pad && rect.right <= window.innerWidth - pad) return;
+      // Full-width bottom sheet (mobile): intentionally spans edge to edge.
+      if (rect.width >= window.innerWidth - pad * 2) return;
+      let target = rect.left;
+      if (target < pad) target = pad;
+      if (target + rect.width > window.innerWidth - pad) {
+        target = window.innerWidth - pad - rect.width;
+      }
+      el.style.left = `${Math.max(pad, target)}px`;
+      el.style.right = 'auto';
+    };
+    const t = setTimeout(clamp, 0);
+    window.addEventListener('resize', clamp);
+    return () => {
+      clearTimeout(t);
+      window.removeEventListener('resize', clamp);
+    };
   }, [userMenuOpen]);
 
   const currentSort =
@@ -262,7 +296,7 @@ export default function DriveToolbar({
               <CaretDown size={11} weight="bold" />
             </button>
             {userMenuOpen && (
-              <div className="drive-user-dropdown">
+              <div className="drive-user-dropdown" ref={userDropdownRef}>
                 <div className="drive-user-dropdown-header">
                   <span className="drive-user-avatar-sm">{userName.charAt(0).toUpperCase()}</span>
                   <span className="drive-user-dropdown-name">{userName}</span>

@@ -5280,6 +5280,60 @@ kbd {
   flex-shrink: 0;
 }
 
+/* ── User dropdown → bottom sheet on phones ─────────────────────────
+   The toolbar wraps on small screens, so the avatar button can sit far
+   from the screen edge and the right-anchored panel overflows. Phones
+   get a sheet (same pattern as file context menus); the JS clamp in
+   DriveToolbar covers everything in between. */
+
+@media (max-width: 640px) {
+  .drive-user-dropdown {
+    position: fixed;
+    top: auto;
+    left: 0;
+    right: 0;
+    bottom: 0;
+    width: 100%;
+    min-width: 0;
+    border-radius: var(--r-lg) var(--r-lg) 0 0;
+    border-left: none;
+    border-right: none;
+    border-bottom: none;
+    padding: 0.4rem 0.5rem calc(env(safe-area-inset-bottom, 0px) + 0.75rem);
+    box-shadow: 0 -24px 70px rgba(0, 0, 0, 0.65);
+    z-index: calc(var(--z-menu) + 5);
+    animation: user-sheet-in 0.22s var(--ease-out);
+  }
+
+  .drive-user-dropdown::before {
+    content: '';
+    display: block;
+    width: 36px;
+    height: 4px;
+    margin: 0.15rem auto 0.55rem;
+    border-radius: var(--r-pill);
+    background: var(--surface-3);
+  }
+
+  .drive-user-dropdown-header {
+    padding: 0.6rem 0.7rem 0.85rem;
+    border-bottom: 1px solid var(--border);
+    margin-bottom: 0.35rem;
+  }
+
+  .drive-user-dropdown-name { font-size: 0.92rem; font-weight: 600; }
+
+  .drive-user-dropdown-item {
+    padding: 0.85rem 0.7rem;
+    font-size: 0.95rem;
+  }
+}
+
+@keyframes user-sheet-in {
+  from { transform: translateY(100%); }
+  to { transform: translateY(0); }
+}
+
 /* ── Responsive ────────────────────────────────────────────────────── */
 
 @media (max-width: 900px) {
