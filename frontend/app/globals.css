@@ -4880,26 +4880,24 @@ kbd {
 .file-card.has-media .file-card-main { padding-right: 1rem; }
 
 .share-pill {
-  margin-left: auto;
   font-size: 0.58rem;
 }
 
+.file-actions-spacer { flex: 1; }
+
+/* Always-visible ⋯ trigger: discoverable at rest, brightens on hover.
+   (It was hover-revealed before — users could not find it.) */
 .card-menu-btn {
   width: 1.7rem;
   height: 1.7rem;
-  opacity: 0;
-  transition: opacity 0.15s var(--ease-out);
+  color: var(--text-dim);
+  transition: color 0.15s var(--ease-out), background 0.15s var(--ease-out);
 }
 
-.file-card:hover .card-menu-btn,
-.file-card.has-menu .card-menu-btn,
-.drive-list-row:hover .card-menu-btn,
-.drive-list-row.has-menu .btn-icon[aria-haspopup='menu'] {
-  opacity: 1;
-}
-
-@media (hover: none) {
-  .card-menu-btn { opacity: 1; }
+.card-menu-btn:hover,
+.card-menu-btn:focus-visible {
+  color: var(--text);
+  background: var(--surface-3);
 }
 
 .file-kind-chip {
@@ -5187,6 +5185,20 @@ kbd {
 .preview-loading .btn-spinner {
   border-color: var(--surface-3);
   border-top-color: var(--accent-strong);
+}
+
+/* Media pops in softly once its blob is ready */
+.preview-media {
+  animation: preview-in 0.28s var(--ease-out);
+}
+
+@keyframes preview-in {
+  from { opacity: 0; transform: scale(0.985); }
+  to { opacity: 1; transform: none; }
+}
+
+@media (prefers-reduced-motion: reduce) {
+  .preview-media { animation: none; }
 }
 
 /* ── Empty-state hero ──────────────────────────────────────────────── */

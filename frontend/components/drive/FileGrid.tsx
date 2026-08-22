@@ -563,15 +563,6 @@ export default function FileGrid({
                   {file.starred && (
                     <Star size={13} weight="fill" className="drive-star" aria-label="Starred" />
                   )}
-                  <span style={{ flex: 1 }} />
-                  <button
-                    className="btn-icon card-menu-btn"
-                    aria-label="More actions"
-                    aria-haspopup="menu"
-                    onClick={(e) => openMenu(e, setFileMenu, file.id)}
-                  >
-                    <DotsThreeVertical size={15} weight="bold" />
-                  </button>
                 </div>
 
                 <button className="file-card-main" onClick={() => onOpenFile(file)}>
@@ -613,6 +604,16 @@ export default function FileGrid({
                       <GlobeHemisphereWest size={11} weight="fill" /> SHARED
                     </span>
                   )}
+                  <span className="file-actions-spacer" />
+                  <button
+                    className="btn-icon card-menu-btn"
+                    aria-label="More actions"
+                    aria-haspopup="menu"
+                    title="More actions"
+                    onClick={(e) => openMenu(e, setFileMenu, file.id)}
+                  >
+                    <DotsThreeVertical size={15} weight="bold" />
+                  </button>
                 </div>
 
                 {fileMenu?.id === file.id && (

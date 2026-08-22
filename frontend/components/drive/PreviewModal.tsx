@@ -46,6 +46,7 @@ export default function PreviewModal({ file, onClose, onStarred, onPrev, onNext,
   const [text, setText] = useState<string | null>(null);
   const [error, setError] = useState(false);
   const modalRef = useRef<HTMLDivElement>(null);
+  const videoRef = useRef<HTMLVideoElement>(null);
 
   useFocusTrap(modalRef, true);
 
@@ -80,6 +81,17 @@ export default function PreviewModal({ file, onClose, onStarred, onPrev, onNext,
       if (objectUrl) URL.revokeObjectURL(objectUrl);
     };
   }, [file.id, kind]);
+
+  // Start playback as soon as the blob is ready. Browsers may refuse
+  // unmuted autoplay without a fresh gesture — fail silently to the
+  // native controls instead of surfacing an error.
+  useEffect(() => {
+    if (kind !== 'video' || !url) return;
+    const v = videoRef.current;
+    if (!v) return;
+    const p = v.play();
+    if (p) p.catch(() => {});
+  }, [kind, url]);
 
   useEffect(() => {
     const onKey = (e: KeyboardEvent) => {
@@ -146,10 +158,27 @@ export default function PreviewModal({ file, onClose, onStarred, onPrev, onNext,
           ) : kind === 'none' ? (
             <NoPreview file={file} />
           ) : kind === 'image' ? (
-            // eslint-disable-next-line @next/next/no-img-element -- blob URLs can't use next/image
-            url && <img src={url} alt={file.original_filename} className="preview-media" />
+            url && (
+              // eslint-disable-next-line @next/next/no-img-element -- blob URLs can't use next/image
+              <img
+                src={url}
+                alt={file.original_filename}
+                className="preview-media"
+                onError={() => setError(true)}
+              />
+            )
           ) : kind === 'video' ? (
-            url && <video src={url} controls className="preview-media" />
+            url && (
+              <video
+                ref={videoRef}
+                src={url}
+                controls
+                playsInline
+                preload="metadata"
+                className="preview-media"
+                onError={() => setError(true)}
+              />
+            )
           ) : kind === 'audio' ? (
             url && <audio src={url} controls className="preview-audio" />
           ) : kind === 'pdf' ? (
