@@ -39,12 +39,16 @@ export const s3Upload = async (
   body: Buffer | Readable,
   contentType: string
 ) => {
+  // No ACL parameter: buckets created since April 2023 default to
+  // "Bucket owner enforced" (ACLs disabled) and REJECT any request that
+  // carries one — this silently broke every upload while reads kept working.
+  // Omitting it keeps behavior correct for both ACL-enabled legacy buckets
+  // (objects default to private) and ACL-disabled buckets.
   const command = new PutObjectCommand({
     Bucket: bucket(),
     Key: key,
     Body: body,
     ContentType: contentType,
-    ACL: 'private',
     ...sseConfig,
   });
 

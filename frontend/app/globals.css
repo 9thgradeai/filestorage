@@ -50,7 +50,12 @@
 html,
 body {
   max-width: 100vw;
+  /* `hidden` turns the body into a scroll container, which breaks
+     position:sticky for the dashboard sidebar/toolbar on iOS Safari.
+     `clip` clips horizontal overflow WITHOUT creating a scroll container,
+     so sticky keeps working; older browsers fall back to hidden. */
   overflow-x: hidden;
+  overflow-x: clip;
 }
 
 body {

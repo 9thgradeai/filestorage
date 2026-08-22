@@ -120,11 +120,20 @@ export const uploadFile = async (req: Request, res: Response) => {
       // Metadata insert failed → remove the orphaned storage object.
       logger.error({ err: error }, 'File metadata insert error:');
       await safeStorageDelete(s3Key, 'upload-rollback');
-      return res.status(StatusCodes.INTERNAL_SERVER_ERROR).json({ message: 'File upload failed' });
+      const reason = error instanceof Error ? error.name : 'UnknownError';
+      return res
+        .status(StatusCodes.INTERNAL_SERVER_ERROR)
+        .json({ message: `File upload failed (${reason})` });
     }
   } catch (error) {
     logger.error({ err: error }, 'File upload error:');
-    return res.status(StatusCodes.INTERNAL_SERVER_ERROR).json({ message: 'File upload failed' });
+    // Surface the error NAME (AccessDenied, NoSuchBucket, …) so storage
+    // misconfigurations are diagnosable from the client without exposing
+    // stack traces or internal details.
+    const reason = error instanceof Error ? error.name : 'UnknownError';
+    return res
+      .status(StatusCodes.INTERNAL_SERVER_ERROR)
+      .json({ message: `File upload failed (${reason})` });
   } finally {
     // Always remove the temp file, success or failure.
     await fs.promises.unlink(filePath).catch(() => {});
