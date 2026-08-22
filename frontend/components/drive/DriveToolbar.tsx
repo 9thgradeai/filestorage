@@ -13,6 +13,7 @@ import {
   HouseSimple,
   SignOut,
   GearSix,
+  X,
 } from '@phosphor-icons/react';
 import type { FileTypeFilter } from '../../lib/drive';
 
@@ -154,6 +155,7 @@ export default function DriveToolbar({
           <div className="drive-search">
             <MagnifyingGlass size={14} weight="bold" className="drive-search-icon" />
             <input
+              id="drive-search"
               type="search"
               value={searchDraft}
               onChange={(e) => setSearchDraft(e.target.value)}
@@ -161,6 +163,20 @@ export default function DriveToolbar({
               aria-label="Search files"
               className="drive-search-input"
             />
+            {searchDraft ? (
+              <button
+                className="drive-search-clear"
+                aria-label="Clear search"
+                onClick={() => {
+                  setSearchDraft('');
+                  document.getElementById('drive-search')?.focus();
+                }}
+              >
+                <X size={12} weight="bold" />
+              </button>
+            ) : (
+              <kbd className="drive-search-kbd" aria-hidden="true">/</kbd>
+            )}
           </div>
 
           <div className="drive-select" aria-label="Sort files">

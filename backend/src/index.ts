@@ -49,9 +49,14 @@ app.use(cors({
   allowedHeaders: ['Content-Type', 'Authorization', 'X-CSRF-Token'],
 }));
 
+// Global backstop per IP. The dashboard SPA legitimately issues a few hundred
+// requests per 15-minute window (list + stats on navigation, debounced
+// palette search, upload refreshes), so the ceiling has to sit above real
+// usage while still capping abuse. Auth/OTP endpoints keep their own strict
+// limiters below.
 app.use(rateLimit({
   windowMs: parseInt(process.env.RATE_LIMIT_WINDOW_MS || '') || 15 * 60 * 1000,
-  max: parseInt(process.env.RATE_LIMIT_MAX || '') || 100,
+  max: parseInt(process.env.RATE_LIMIT_MAX || '') || 600,
   message: 'Too many requests from this IP, please try again after 15 minutes',
   standardHeaders: true,
   legacyHeaders: false,

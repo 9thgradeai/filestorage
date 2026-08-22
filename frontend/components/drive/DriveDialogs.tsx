@@ -7,10 +7,19 @@ import type { DriveFile, Folder } from '../../lib/drive';
 import { useFocusTrap } from '../../lib/useFocusTrap';
 
 export interface DialogState {
-  kind: 'newFolder' | 'renameFile' | 'renameFolder' | 'moveFile' | 'moveFolder' | 'share' | 'confirmDelete';
+  kind:
+    | 'newFolder'
+    | 'renameFile'
+    | 'renameFolder'
+    | 'moveFile'
+    | 'moveFolder'
+    | 'share'
+    | 'confirmDelete'
+    | 'confirmBulkDelete';
   file?: DriveFile;
   folder?: Folder;
   parentId?: number | null;
+  count?: number;
 }
 
 interface Props {
@@ -23,6 +32,7 @@ interface Props {
   onMoveFile: (file: DriveFile, parentId: number | null) => Promise<void> | void;
   onMoveFolder: (folder: Folder, parentId: number | null) => Promise<void> | void;
   onConfirmDelete: (target: { type: 'file' | 'folder'; id: number }) => Promise<void> | void;
+  onConfirmBulkDelete: (count: number) => Promise<void> | void;
   onMakePublic: (file: DriveFile) => Promise<void> | void;
   onGenerateShare: (file: DriveFile) => Promise<string>;
 }
@@ -60,6 +70,7 @@ export default function DriveDialogs({
   onMoveFile,
   onMoveFolder,
   onConfirmDelete,
+  onConfirmBulkDelete,
   onMakePublic,
   onGenerateShare,
 }: Props) {
@@ -90,6 +101,8 @@ export default function DriveDialogs({
         return 'Share link';
       case 'confirmDelete':
         return 'Delete forever?';
+      case 'confirmBulkDelete':
+        return `Delete ${dialog.count ?? 0} files forever?`;
     }
   }, [dialog]);
 
@@ -387,6 +400,37 @@ export default function DriveDialogs({
                   setBusy(true);
                   try {
                     await onConfirmDelete(target);
+                    onClose();
+                  } catch (err: any) {
+                    toast.error(err?.message || 'Delete failed');
+                  } finally {
+                    setBusy(false);
+                  }
+                }}
+              >
+                Delete forever
+              </button>
+            </div>
+          </div>
+        )}
+        {dialog.kind === 'confirmBulkDelete' && (
+          <div className="modal-form">
+            <p className="muted">
+              This permanently deletes <strong>{dialog.count ?? 0} file{(dialog.count ?? 0) !== 1 ? 's' : ''}</strong>.
+              This cannot be undone.
+            </p>
+            <div className="modal-form-actions">
+              <button type="button" className="btn btn-ghost" onClick={onClose}>
+                Cancel
+              </button>
+              <button
+                type="button"
+                className="btn btn-danger"
+                disabled={busy}
+                onClick={async () => {
+                  setBusy(true);
+                  try {
+                    await onConfirmBulkDelete(dialog.count ?? 0);
                     onClose();
                   } catch (err: any) {
                     toast.error(err?.message || 'Delete failed');

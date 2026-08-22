@@ -12,7 +12,7 @@ export default function DashboardLoading() {
         <div className="skeleton skeleton-toolbar" />
         <div className="skeleton-grid">
           {Array.from({ length: 12 }).map((_, i) => (
-            <div key={i} className="skeleton skeleton-card" />
+            <div key={i} className="skeleton skeleton-media-card" style={{ height: '208px' }} />
           ))}
         </div>
       </div>

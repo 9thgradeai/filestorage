@@ -15,10 +15,15 @@ import {
 } from '../../lib/drive';
 import DashboardSidebar from '../../components/drive/DashboardSidebar';
 import DriveToolbar, { type Crumb } from '../../components/drive/DriveToolbar';
-import FileGrid, { type FileAction } from '../../components/drive/FileGrid';
-import UploadQueue, { type UploadItem } from '../../components/drive/UploadQueue';
+import FileGrid, {
+  type FileAction,
+  type FolderAction,
+} from '../../components/drive/FileGrid';
+import UploadDock, { type UploadItem } from '../../components/drive/UploadDock';
 import PreviewModal from '../../components/drive/PreviewModal';
 import DriveDialogs, { type DialogState } from '../../components/drive/DriveDialogs';
+import CommandPalette from '../../components/drive/CommandPalette';
+import ShortcutsOverlay from '../../components/drive/ShortcutsOverlay';
 import ChatButton from '../../components/ai/ChatButton';
 import ChatModal from '../../components/ai/ChatModal';
 
@@ -49,9 +54,13 @@ export default function DashboardPage() {
   const [sidebarOpen, setSidebarOpen] = useState(false);
   const [dragOver, setDragOver] = useState(false);
   const [loadError, setLoadError] = useState<string | null>(null);
+  const [paletteOpen, setPaletteOpen] = useState(false);
+  const [shortcutsOpen, setShortcutsOpen] = useState(false);
   const dragDepth = useRef(0);
+  const pickerRef = useRef<HTMLInputElement>(null);
 
   const folderMap = useMemo(() => new Map(folders.map((f) => [f.id, f])), [folders]);
+  const userName = user?.name || user?.email || 'User';
 
   const refreshStats = useCallback(async () => {
     try {
@@ -203,10 +212,54 @@ export default function DashboardPage() {
     return folders.filter((f) => !f.trashed_at && (f.parent_id ?? null) === parent);
   }, [folders, mode, folderId, search, type]);
 
+  const filtersActive = Boolean(search.trim()) || type !== undefined;
+
+  // ── Global keyboard layer ────────────────────────────────────────────
+
+  const openFilePicker = useCallback(() => pickerRef.current?.click(), []);
+
+  useEffect(() => {
+    const onKey = (e: KeyboardEvent) => {
+      const target = e.target as HTMLElement | null;
+      const typing =
+        !!target &&
+        (target.tagName === 'INPUT' ||
+          target.tagName === 'TEXTAREA' ||
+          target.tagName === 'SELECT' ||
+          target.isContentEditable);
+      const meta = e.metaKey || e.ctrlKey;
+      const overlayOpen = !!previewFile || !!dialog || shortcutsOpen;
+
+      if (meta && e.key.toLowerCase() === 'k') {
+        e.preventDefault();
+        setPaletteOpen((v) => !v);
+        return;
+      }
+      if (typing || overlayOpen) return;
+
+      if (e.key === '/') {
+        e.preventDefault();
+        document.getElementById('drive-search')?.focus();
+      } else if (e.key === '?') {
+        e.preventDefault();
+        setShortcutsOpen(true);
+      } else if (meta && e.key.toLowerCase() === 'a') {
+        e.preventDefault();
+        setSelected(new Set(files.map((f) => f.id)));
+      } else if (e.key === 'Escape' && selected.size > 0 && !paletteOpen) {
+        setSelected(new Set());
+      }
+    };
+    window.addEventListener('keydown', onKey);
+    return () => window.removeEventListener('keydown', onKey);
+  }, [files, previewFile, dialog, shortcutsOpen, paletteOpen, selected.size]);
+
   // ── Uploads ──────────────────────────────────────────────────────────
+
   const uploadFiles = useCallback(
-    (fileList: File[]) => {
-      const parent = mode === 'folder' ? folderId : null;
+    (fileList: File[], parentOverride?: number | null) => {
+      const parent =
+        parentOverride !== undefined ? parentOverride : mode === 'folder' ? folderId : null;
       const accepted = fileList.filter((file) => {
         if (file.size > MAX_FILE_SIZE) {
           toast.error(`"${file.name}" exceeds the 100 MB limit`);
@@ -218,6 +271,7 @@ export default function DashboardPage() {
         }
         return true;
       });
+      if (accepted.length === 0) return;
 
       const finish = () => {
         refreshStats();
@@ -230,7 +284,7 @@ export default function DashboardPage() {
       let settled = 0;
       const onSettled = () => {
         settled += 1;
-        if (accepted.length > 0 && settled === accepted.length) finish();
+        if (settled === accepted.length) finish();
       };
 
       accepted.forEach((file, i) => {
@@ -279,6 +333,7 @@ export default function DashboardPage() {
   }, []);
 
   // ── File actions ─────────────────────────────────────────────────────
+
   const handleFileAction = useCallback(
     async (action: FileAction, file: DriveFile) => {
       try {
@@ -343,28 +398,36 @@ export default function DashboardPage() {
       const targets = files.filter((f) => selected.has(f.id));
       if (targets.length === 0) return;
 
+      // Destructive deletes get an explicit themed confirmation.
       if (action === 'delete') {
-        const confirmed = window.confirm(
-          `Permanently delete ${targets.length} file${targets.length !== 1 ? 's' : ''}? This cannot be undone.`
-        );
-        if (!confirmed) return;
+        setDialog({ kind: 'confirmBulkDelete', count: targets.length });
+        return;
       }
 
+      let failures = 0;
       try {
         for (const file of targets) {
-          if (action === 'download') {
-            await doDownload(file);
-          } else if (action === 'star' || action === 'unstar') {
-            await driveApi.starFile(file.id, action === 'star');
-          } else if (action === 'trash') {
-            await driveApi.trashFile(file.id);
-          } else if (action === 'delete') {
-            await driveApi.deleteFile(file.id);
+          try {
+            if (action === 'download') {
+              await doDownload(file);
+            } else if (action === 'star') {
+              await driveApi.starFile(file.id, true);
+            } else if (action === 'unstar') {
+              await driveApi.starFile(file.id, false);
+            } else if (action === 'trash') {
+              await driveApi.trashFile(file.id);
+            } else if (action === 'restore') {
+              await driveApi.restoreFile(file.id);
+            }
+          } catch {
+            failures += 1;
           }
         }
-        toast.success(`${targets.length} ${targets.length === 1 ? 'file' : 'files'} updated`);
-      } catch (err: any) {
-        toast.error(err.message || 'Bulk action failed');
+        if (failures > 0) {
+          toast.error(`${failures} of ${targets.length} ${targets.length === 1 ? 'file' : 'files'} failed`);
+        } else {
+          toast.success(`${targets.length} ${targets.length === 1 ? 'file' : 'files'} updated`);
+        }
       } finally {
         setSelected(new Set());
         refreshStats();
@@ -374,35 +437,91 @@ export default function DashboardPage() {
     [files, selected, doDownload, refreshStats, reload, mode]
   );
 
-  // ── Folder actions ───────────────────────────────────────────────────
-  const trashFolder = useCallback(
-    async (f: Folder) => {
+  const handleBulkDeleteConfirmed = useCallback(async () => {
+    const targets = files.filter((f) => selected.has(f.id));
+    if (targets.length === 0) return;
+    let failures = 0;
+    for (const file of targets) {
       try {
-        await driveApi.trashFolder(f.id);
-        toast.success('Folder moved to trash');
-        refreshFolders();
-        refreshStats();
-        reload(1, mode);
-      } catch (err: any) {
-        toast.error(err.message || 'Action failed');
+        await driveApi.deleteFile(file.id);
+      } catch {
+        failures += 1;
+      }
+    }
+    if (failures > 0) {
+      throw new Error(`${failures} of ${targets.length} could not be deleted`);
+    }
+    toast.success(`${targets.length} deleted permanently`);
+    setSelected(new Set());
+    refreshStats();
+    reload(1, mode);
+  }, [files, selected, refreshStats, reload, mode]);
+
+  // ── Folder actions (from grid menus) ─────────────────────────────────
+
+  const handleFolderAction = useCallback(
+    async (action: FolderAction, folder: Folder) => {
+      switch (action) {
+        case 'rename':
+          setDialog({ kind: 'renameFolder', folder });
+          break;
+        case 'move':
+          setDialog({ kind: 'moveFolder', folder });
+          break;
+        case 'trash':
+          try {
+            await driveApi.trashFolder(folder.id);
+            toast.success('Folder moved to trash');
+            refreshFolders();
+            refreshStats();
+            reload(1, mode);
+          } catch (err: any) {
+            toast.error(err.message || 'Action failed');
+          }
+          break;
+        case 'restore':
+          try {
+            await driveApi.restoreFolder(folder.id);
+            toast.success('Folder restored');
+            refreshFolders();
+            refreshStats();
+            reload(1, mode);
+          } catch (err: any) {
+            toast.error(err.message || 'Action failed');
+          }
+          break;
+        case 'delete':
+          setDialog({ kind: 'confirmDelete', folder });
+          break;
       }
     },
     [refreshFolders, refreshStats, reload, mode]
   );
 
-  const restoreFolder = useCallback(
-    async (f: Folder) => {
-      try {
-        await driveApi.restoreFolder(f.id);
-        toast.success('Folder restored');
-        refreshFolders();
-        refreshStats();
-        reload(1, mode);
-      } catch (err: any) {
-        toast.error(err.message || 'Action failed');
+  const moveFilesToFolder = useCallback(
+    async (ids: number[], targetFolderId: number | null) => {
+      if (ids.length === 0) return;
+      let failures = 0;
+      for (const id of ids) {
+        try {
+          await driveApi.moveFile(id, targetFolderId);
+        } catch {
+          failures += 1;
+        }
       }
+      if (failures > 0) {
+        toast.error(`${failures} of ${ids.length} could not be moved`);
+      } else {
+        const name = targetFolderId ? folderMap.get(targetFolderId)?.name : 'My Files';
+        toast.success(
+          ids.length === 1 ? `Moved to ${name}` : `${ids.length} files moved to ${name}`
+        );
+      }
+      setSelected(new Set());
+      refreshStats();
+      reload(1, mode);
     },
-    [refreshFolders, refreshStats, reload, mode]
+    [folderMap, refreshStats, reload, mode]
   );
 
   const confirmDelete = useCallback(
@@ -419,6 +538,7 @@ export default function DashboardPage() {
         reload(1, mode);
       } catch (err: any) {
         toast.error(err.message || 'Could not delete');
+        throw err;
       }
     },
     [refreshFolders, refreshStats, reload, mode]
@@ -486,6 +606,18 @@ export default function DashboardPage() {
     [mode, folderId, refreshFolders, reload]
   );
 
+  // ── Preview navigation (← → cycle through current listing) ───────────
+
+  const previewIndex = previewFile ? files.findIndex((f) => f.id === previewFile.id) : -1;
+  const gotoPreview = useCallback(
+    (dir: 1 | -1) => {
+      if (files.length === 0 || previewIndex === -1) return;
+      const next = (previewIndex + dir + files.length) % files.length;
+      setPreviewFile(files[next]);
+    },
+    [files, previewIndex]
+  );
+
   if (authLoading) {
     return (
       <div className="page page-glow">
@@ -501,9 +633,13 @@ export default function DashboardPage() {
   const totalPages = Math.max(1, pagination.totalPages);
 
   return (
-    <div className={`drive-shell ${sidebarOpen ? 'sidebar-open' : ''} ${dragOver ? 'dragging' : ''}`}>
+    <div
+      className={`drive-shell ${sidebarOpen ? 'sidebar-open' : ''} ${
+        dragOver ? 'dragging' : ''
+      } ${uploadItems.length > 0 ? 'has-dock' : ''}`}
+    >
       <DashboardSidebar
-        userName={user?.name || user?.email || 'User'}
+        userName={userName}
         folders={folders}
         stats={stats}
         mode={mode}
@@ -514,9 +650,9 @@ export default function DashboardPage() {
         }
         onRenameFolder={(f) => setDialog({ kind: 'renameFolder', folder: f })}
         onMoveFolder={(f) => setDialog({ kind: 'moveFolder', folder: f })}
-        onTrashFolder={trashFolder}
-        onRestoreFolder={restoreFolder}
-        onDeleteFolder={(f) => setDialog({ kind: 'confirmDelete', folder: f })}
+        onTrashFolder={(f: Folder) => handleFolderAction('trash', f)}
+        onRestoreFolder={(f: Folder) => handleFolderAction('restore', f)}
+        onDeleteFolder={(f: Folder) => setDialog({ kind: 'confirmDelete', folder: f })}
         onLogout={() => {
           logout();
           router.push('/');
@@ -586,10 +722,10 @@ export default function DashboardPage() {
           onNewFolder={() =>
             setDialog({ kind: 'newFolder', parentId: mode === 'folder' ? folderId : null })
           }
-          onUpload={uploadFiles}
+          onUpload={(fs) => uploadFiles(fs)}
           sidebarOpen={sidebarOpen}
           onToggleSidebar={() => setSidebarOpen((s) => !s)}
-          userName={user?.name || user?.email || 'User'}
+          userName={userName}
           onLogout={() => { logout(); router.push('/'); }}
         />
 
@@ -612,6 +748,7 @@ export default function DashboardPage() {
             search={search}
             selected={selected}
             error={loadError}
+            filtersActive={filtersActive}
             onRetry={() => reload()}
             onToggleSelect={(id) =>
               setSelected((prev) => {
@@ -633,6 +770,10 @@ export default function DashboardPage() {
             onOpenFile={(f) => setPreviewFile(f)}
             onFileAction={handleFileAction}
             onBulkAction={handleBulkAction}
+            onFolderAction={handleFolderAction}
+            onMoveFilesToFolder={moveFilesToFolder}
+            onUploadFilesToFolder={(fs, fid) => uploadFiles(fs, fid)}
+            onBrowseUpload={openFilePicker}
           />
           {totalPages > 1 && !loading && (
             <div className="pagination">
@@ -658,18 +799,61 @@ export default function DashboardPage() {
         </div>
       </main>
 
-      <UploadQueue
+      <input
+        ref={pickerRef}
+        type="file"
+        multiple
+        onChange={(e) => {
+          const picked = Array.from(e.target.files || []);
+          if (picked.length) uploadFiles(picked);
+          e.target.value = '';
+        }}
+        style={{ display: 'none' }}
+        aria-hidden="true"
+        tabIndex={-1}
+      />
+
+      <CommandPalette
+        open={paletteOpen}
+        onClose={() => setPaletteOpen(false)}
+        folders={folders}
+        view={view}
+        onNavigate={navigate}
+        onNewFolder={() =>
+          setDialog({ kind: 'newFolder', parentId: mode === 'folder' ? folderId : null })
+        }
+        onUploadClick={openFilePicker}
+        onToggleView={() => setView((v) => (v === 'grid' ? 'list' : 'grid'))}
+        onOpenSettings={() => router.push('/settings')}
+        onOpenFile={(f) => setPreviewFile(f)}
+        onOpenFolder={openFolder}
+        onSearchAll={(q) => setSearch(q)}
+      />
+
+      <ShortcutsOverlay open={shortcutsOpen} onClose={() => setShortcutsOpen(false)} />
+
+      <UploadDock
         items={uploadItems}
         onDismiss={(id) => setUploadItems((prev) => prev.filter((u) => u.id !== id))}
+        onClear={() => setUploadItems([])}
       />
 
       {previewFile && (
         <PreviewModal
           file={previewFile}
           onClose={() => setPreviewFile(null)}
+          onPrev={files.length > 1 ? () => gotoPreview(-1) : undefined}
+          onNext={files.length > 1 ? () => gotoPreview(1) : undefined}
+          position={
+            previewIndex >= 0 && files.length > 1
+              ? `${previewIndex + 1} / ${files.length}`
+              : undefined
+          }
           onStarred={async (f) => {
             await driveApi.starFile(f.id, !f.starred);
-            setPreviewFile({ ...f, starred: !f.starred });
+            const updated = { ...f, starred: !f.starred };
+            setPreviewFile(updated);
+            setFiles((prev) => prev.map((x) => (x.id === f.id ? updated : x)));
             refreshStats();
             reload();
           }}
@@ -686,6 +870,7 @@ export default function DashboardPage() {
         onMoveFile={moveFile}
         onMoveFolder={moveFolder}
         onConfirmDelete={confirmDelete}
+        onConfirmBulkDelete={handleBulkDeleteConfirmed}
         onMakePublic={makePublic}
         onGenerateShare={generateShare}
       />

@@ -15,6 +15,7 @@ import {
   SignOut,
   HardDrives,
   GearSix,
+  WarningCircle,
 } from '@phosphor-icons/react';
 import { Brand } from '../Brand';
 import { formatQuota, formatBytes } from '../../lib/format';
@@ -72,6 +73,36 @@ export default function DashboardSidebar({
     }
     return (parentId: number | null) => (map.get(parentId) || []).sort((a, b) => a.name.localeCompare(b.name));
   }, [folders]);
+
+  // Ancestors of the open folder stay softly highlighted so the user always
+  // sees where they are inside the tree.
+  const activeTrail = useMemo(() => {
+    if (mode !== 'folder' || !folderId) return new Set<number>();
+    const byId = new Map(folders.map((f) => [f.id, f]));
+    const chain = new Set<number>();
+    let cur = byId.get(folderId);
+    while (cur) {
+      chain.add(cur.id);
+      cur = cur.parent_id ? byId.get(cur.parent_id) : undefined;
+    }
+    return chain;
+  }, [folders, mode, folderId]);
+
+  // Auto-expand the branch containing the open folder.
+  useEffect(() => {
+    if (activeTrail.size === 0) return;
+    setExpanded((prev) => {
+      const next = new Set(prev);
+      let changed = false;
+      for (const id of activeTrail) {
+        if (!next.has(id)) {
+          next.add(id);
+          changed = true;
+        }
+      }
+      return changed ? next : prev;
+    });
+  }, [activeTrail]);
 
   const toggle = (id: number) => {
     setExpanded((prev) => {
@@ -149,11 +180,12 @@ export default function DashboardSidebar({
     const isOpen = expanded.has(folder.id);
     const children = childrenOf(folder.id);
     const isCurrent = mode === 'folder' && folderId === folder.id;
+    const inTrail = activeTrail.has(folder.id);
 
     return (
       <div key={folder.id}>
         <div
-          className={`drive-folder-row ${isCurrent ? 'active' : ''}`}
+          className={`drive-folder-row ${isCurrent ? 'active' : ''} ${inTrail && !isCurrent ? 'trail' : ''}`}
           style={{ paddingLeft: `${10 + depth * 14}px` }}
         >
           <button
@@ -230,7 +262,9 @@ export default function DashboardSidebar({
   };
 
   const rootFolders = childrenOf(null);
-  const usedPct = stats && stats.quota > 0 ? Math.min(100, (stats.used / stats.quota) * 100) : 0;
+  const usedPct =
+    stats && stats.quota > 0 ? Math.min(100, (stats.used / stats.quota) * 100) : 0;
+  const quotaState = usedPct >= 90 ? 'critical' : usedPct >= 70 ? 'warn' : 'ok';
 
   return (
     <aside className="drive-sidebar">
@@ -281,17 +315,24 @@ export default function DashboardSidebar({
       </div>
 
       <div className="drive-sidebar-foot">
-        <div className="drive-quota">
-          <div className="drive-quota-row">
-            <HardDrives size={13} weight="duotone" />
-            <span>
-              {stats ? `${formatBytes(stats.used)} of ${formatQuota(stats.quota)}` : '—'}
-            </span>
+        <Link href="/settings" className={`storage-card storage-${quotaState}`} aria-label="Storage usage — manage in settings">
+          <div className="storage-card-row">
+            <HardDrives size={14} weight="duotone" />
+            <span className="storage-card-label">Storage</span>
+            <span className="storage-card-pct mono">{Math.round(usedPct)}%</span>
           </div>
-          <div className="drive-quota-track">
-            <div className="drive-quota-fill" style={{ width: `${usedPct}%` }} />
+          <div className="storage-card-track">
+            <div className="storage-card-fill" style={{ width: `${usedPct}%` }} />
           </div>
-        </div>
+          <p className="storage-card-sub">
+            {stats ? `${formatBytes(stats.used)} of ${formatQuota(stats.quota)} used` : '—'}
+          </p>
+          {quotaState === 'critical' && (
+            <p className="storage-card-alert">
+              <WarningCircle size={12} weight="fill" /> Almost full — clean up trash
+            </p>
+          )}
+        </Link>
         <div className="drive-user">
           <span className="drive-user-avatar">{userName.charAt(0).toUpperCase()}</span>
           <span className="drive-user-name" title={userName}>
